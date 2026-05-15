@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 
 export interface NpyArray {
-  data: Float32Array;
+  data: Float32Array | Uint16Array | Uint32Array;
   shape: number[];
 }
 
@@ -23,15 +23,17 @@ export function readNpy(path: string): NpyArray {
   const shapeMatch = header.match(/'shape':\s*\(([^)]*)\)/);
   const forderMatch = header.match(/'fortran_order':\s*(True|False)/);
   if (!dtypeMatch || !shapeMatch || !forderMatch) throw new Error(`malformed npy header: ${header}`);
-  if (dtypeMatch[1] !== '<f4') throw new Error(`unsupported dtype: ${dtypeMatch[1]} (only <f4 supported)`);
+  const dtype = dtypeMatch[1];
+  if (!['<f4', '<u2', '<u4'].includes(dtype as string)) throw new Error(`unsupported dtype: ${dtype}`);
   if (forderMatch[1] !== 'False') throw new Error(`fortran-order arrays not supported`);
   const shape = (shapeMatch[1] || '').split(',')
     .map((s) => s.trim()).filter((s) => s.length > 0)
     .map((s) => parseInt(s, 10));
   const dataStart = headerStart + headerLen;
-  const data = new Float32Array(
-    bytes.buffer.slice(bytes.byteOffset + dataStart, bytes.byteOffset + bytes.byteLength)
-  );
+  const rawBuf = bytes.buffer.slice(bytes.byteOffset + dataStart, bytes.byteOffset + bytes.byteLength);
+  const data = dtype === '<f4' ? new Float32Array(rawBuf)
+             : dtype === '<u2' ? new Uint16Array(rawBuf)
+             : new Uint32Array(rawBuf);
   const expected = shape.reduce((a, b) => a * b, 1);
   if (data.length !== expected) {
     throw new Error(`shape ${JSON.stringify(shape)} mismatches data length ${data.length}`);

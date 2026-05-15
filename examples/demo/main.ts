@@ -61,6 +61,41 @@ function drawToCanvas(canvas: HTMLCanvasElement, image: SegmentInput): void {
   }
 }
 
+function drawMaskOverlay(canvas: HTMLCanvasElement, labels: Uint32Array, w: number, h: number, baseRgba: Uint8ClampedArray | null = null): void {
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d')!;
+  // Distinct colors via golden-ratio hue rotation.
+  const colorFor = (label: number): [number, number, number] => {
+    if (label === 0) return [0, 0, 0];
+    const hue = (label * 137.508) % 360;
+    const c = 0.7, x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+    let r = 0, g = 0, b = 0;
+    if      (hue <  60) { r = c; g = x; }
+    else if (hue < 120) { r = x; g = c; }
+    else if (hue < 180) { g = c; b = x; }
+    else if (hue < 240) { g = x; b = c; }
+    else if (hue < 300) { r = x; b = c; }
+    else                { r = c; b = x; }
+    return [Math.round(255 * r), Math.round(255 * g), Math.round(255 * b)];
+  };
+  const out = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
+    const l = labels[i]!;
+    if (l === 0) {
+      if (baseRgba) {
+        out[i*4]   = baseRgba[i*4]!;
+        out[i*4+1] = baseRgba[i*4+1]!;
+        out[i*4+2] = baseRgba[i*4+2]!;
+      }
+      out[i*4+3] = 255;
+    } else {
+      const [r, g, b] = colorFor(l);
+      out[i*4] = r; out[i*4+1] = g; out[i*4+2] = b; out[i*4+3] = 255;
+    }
+  }
+  ctx.putImageData(new ImageData(out, w, h), 0, 0);
+}
+
 function drawHeatmap(canvas: HTMLCanvasElement, data: Float32Array, w: number, h: number): void {
   canvas.width = w; canvas.height = h;
   const ctx = canvas.getContext('2d')!;
@@ -152,7 +187,12 @@ async function run() {
     drawHeatmap($('flowYCanvas') as HTMLCanvasElement, t0.flows_cellprob.subarray(0, hw),        B, B);
     drawHeatmap($('flowXCanvas') as HTMLCanvasElement, t0.flows_cellprob.subarray(hw, 2*hw),     B, B);
     drawHeatmap($('cellprobCanvas') as HTMLCanvasElement, t0.flows_cellprob.subarray(2*hw, 3*hw), B, B);
-    log('GATE: PASS (preprocess + inference complete; postprocess is M4/M5)', 'pass');
+    drawMaskOverlay($('masksCanvas') as HTMLCanvasElement, t0.masks, B, B);
+    const totalMasks = r.tiles.reduce((sum, t) => sum + t.maskCount, 0);
+    const totalDynMs = r.tiles.reduce((sum, t) => sum + t.dynamicsMs, 0);
+    log(`masks: ${totalMasks} total across tiles  (tile 0: ${t0.maskCount})`);
+    log(`dynamics: ${totalDynMs.toFixed(0)} ms total`);
+    log('GATE: PASS (preprocess + inference + dynamics complete; tile stitching is M5)', 'pass');
   } catch (err: unknown) {
     const e = err as Error;
     if (e instanceof UnsupportedEnvironmentError) log(`ENV: ${e.message}`, 'fail');

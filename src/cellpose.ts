@@ -10,6 +10,7 @@ import {
   normalizePerChannel, type NormalizeOptions,
   makeTiles, type TileRecord,
 } from './preprocess/index.js';
+import { computeMasks, type ComputeMasksOptions } from './postprocess/index.js';
 import type { MainToWorker, WorkerToMain } from './worker-protocol.js';
 
 const DEFAULT_WASM_PATHS = '/ort/'; // overridable via opts.wasmPaths
@@ -27,10 +28,16 @@ export interface FromPretrainedOptions {
 
 export interface SegmentTileOutput {
   flows_cellprob: Float32Array;
+  /** Instance label map for this tile, (bsize, bsize) row-major. 0 = background. */
+  masks: Uint32Array;
+  /** Number of instances in this tile (max label). */
+  maskCount: number;
   tx: number;
   ty: number;
   bsize: number;
   inferenceMs: number;
+  /** Wall-clock ms spent in dynamics for this tile. */
+  dynamicsMs: number;
 }
 
 export interface SegmentInput {
@@ -45,6 +52,8 @@ export interface SegmentOptions extends ChannelMapOptions {
   tile?: number;
   overlap?: number;
   normalize?: NormalizeOptions;
+  /** Dynamics postprocessing knobs. */
+  dynamics?: ComputeMasksOptions;
   /** Fires after each tile finishes inference. */
   onTileProgress?: (done: number, total: number) => void;
   /** Abort the in-flight call. Terminates the worker; next call respawns. */
@@ -219,10 +228,22 @@ export class Cellpose {
       for (let i = 0; i < tiles.length; i++) {
         const t = tiles[i]!;
         const r = await this._runTile(t.tile, tileSize);
+        // Split flows_cellprob: dy = ch0, dx = ch1, cellprob = ch2
+        const hw = tileSize * tileSize;
+        const dP = new Float32Array(2 * hw);
+        dP.set(r.flowsCellprob.subarray(0, hw),         0);     // dy
+        dP.set(r.flowsCellprob.subarray(hw, 2 * hw),    hw);    // dx
+        const cellprob = r.flowsCellprob.subarray(2 * hw, 3 * hw) as Float32Array;
+        const tDyn = performance.now();
+        const masks = computeMasks(dP, cellprob, tileSize, tileSize, opts.dynamics ?? {});
+        const dynamicsMs = performance.now() - tDyn;
         out.push({
           flows_cellprob: r.flowsCellprob,
+          masks: masks.masks,
+          maskCount: masks.count,
           tx: t.tx, ty: t.ty, bsize: tileSize,
           inferenceMs: r.inferenceMs,
+          dynamicsMs,
         });
         opts.onTileProgress?.(i + 1, tiles.length);
       }

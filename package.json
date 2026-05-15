@@ -5,6 +5,14 @@
   "type": "module",
   "license": "MIT",
   "author": "Baha Elkassaby",
+  "homepage": "https://github.com/belkassaby/Cellpose.js#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/belkassaby/Cellpose.js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/belkassaby/Cellpose.js/issues"
+  },
   "keywords": [
     "cellpose",
     "segmentation",

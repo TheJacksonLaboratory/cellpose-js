@@ -133,6 +133,17 @@ export function diameterResize(
   }
   const dstW = Math.max(1, Math.round(width * scale));
   const dstH = Math.max(1, Math.round(height * scale));
+  // Memory guard: the canvas-based per-channel resize allocates ~3 canvases
+  // per channel × 3 channels. A 4096x4096 destination already consumes
+  // ~300 MB across those canvases. Anything larger reliably OOMs.
+  const MAX_PIXELS = 4096 * 4096;
+  if (dstW * dstH > MAX_PIXELS) {
+    throw new Error(
+      `diameterResize: requested output ${dstW}x${dstH} (scale ${scale.toFixed(2)}) ` +
+      `exceeds the safe limit (4096x4096). Source is ${width}x${height}; estimated ` +
+      `diameter is ${opts.diameter}. Increase diameter to downscale less aggressively.`
+    );
+  }
   const hwOut = dstW * dstH;
   const hwIn = width * height;
   const out = new Float32Array(channels * hwOut);

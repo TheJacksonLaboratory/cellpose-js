@@ -18,17 +18,19 @@
     "README.md",
     "LICENSE"
   ],
-  "main": "./dist/cellpose-js.js",
-  "module": "./dist/cellpose-js.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/cellpose-js.js"
-    }
+      "import": "./dist/index.js"
+    },
+    "./webgpu-worker": "./dist/inference.worker.js",
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "vite build && tsc --emitDeclarationOnly --outDir dist",
+    "build": "tsc",
     "dev": "vite",
     "demo": "vite serve examples/demo",
     "test": "vitest run",

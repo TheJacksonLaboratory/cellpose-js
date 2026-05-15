@@ -130,7 +130,7 @@ export class Cellpose {
     if (this._workerReady) return this._workerReady;
 
     const worker = new Worker(
-      new URL('./inference.worker.ts', import.meta.url),
+      new URL('./inference.worker.js', import.meta.url),
       { type: 'module' }
     );
     this._worker = worker;

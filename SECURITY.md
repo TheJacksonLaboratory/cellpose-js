@@ -17,10 +17,10 @@ If you believe you've found a vulnerability in `cellpose-js`, please **do not** 
 
 ### Inputs that affect what gets fetched
 
-| Input | Default | Risk if attacker-controlled |
-|---|---|---|
+| Input                                                         | Default                   | Risk if attacker-controlled                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `modelUrl` argument to `Cellpose.fromPretrained(modelUrl, …)` | none — caller must supply | An attacker who controls this string can cause the browser to download arbitrary content (up to 588 MB and beyond). Same-origin policy and CORS still apply, so the response can't be read cross-origin without permission, but a malicious URL can: (1) waste bandwidth, (2) point at a malformed ONNX that crashes the inference worker, (3) cause IndexedDB to fill with attacker-supplied bytes. |
-| `wasmPaths` argument to `configureOrt({ wasmPaths })` | `/ort/` | Same risk class as `modelUrl`. The path is used for dynamic ESM `import()`, which requires same-origin or proper CORS — so cross-origin substitution is hard. Same-origin substitution would require an existing site compromise. |
+| `wasmPaths` argument to `configureOrt({ wasmPaths })`         | `/ort/`                   | Same risk class as `modelUrl`. The path is used for dynamic ESM `import()`, which requires same-origin or proper CORS — so cross-origin substitution is hard. Same-origin substitution would require an existing site compromise.                                                                                                                                                                    |
 
 ### What the package does **not** do
 
@@ -48,7 +48,7 @@ If you're integrating `cellpose-js` into a product:
 
 ## Known scanner findings
 
-`onnxruntime-web` (cellpose-js's peer dependency) is sometimes flagged by static-analysis scanners with labels like *"Obfuscated code"* or *"Supply-chain risk"*. These are typically structural false positives:
+`onnxruntime-web` (cellpose-js's peer dependency) is sometimes flagged by static-analysis scanners with labels like _"Obfuscated code"_ or _"Supply-chain risk"_. These are typically structural false positives:
 
 - ort-web ships minified bundles and binary `.wasm` blobs by design — large minified JS looks "obfuscated" to a scanner but is just minified.
 - ort-web also accepts caller-supplied URLs/paths (it's a generic ONNX runtime), which scanners flag as a permissive input surface. That's the documented behavior of any model-loader library; mitigations belong at the consumer layer (allowlists, hardcoded defaults) — see §Recommended consumer practices above.

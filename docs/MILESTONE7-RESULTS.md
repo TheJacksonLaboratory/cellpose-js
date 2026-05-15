@@ -85,7 +85,7 @@ End-to-end timings from real jit-ui runs:
 ## What Phase 1 ships
 
 - **Public GitHub repo** — https://github.com/belkassaby/Cellpose.js
-- **Public HF Hub model** — https://huggingface.co/Ballon999/cellpose-sam-onnx
+- **Public HF Hub model** — https://huggingface.co/ballon999/cellpose-sam-onnx
 - **jit-ui engine** in local working tree (uncommitted per project policy)
 - **8 commits + 7 docs** on cellpose-js's main branch
 - **14/14 vitest parity tests pass**: preprocess (7) + dynamics (3) + averaging round-trip (4)

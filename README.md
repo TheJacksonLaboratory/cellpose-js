@@ -34,7 +34,7 @@ npm install cellpose-js onnxruntime-web
 
 You also need to host:
 
-1. **The model**: `cpsam_fp16.onnx` (588 MB). Either upload to your own CDN, or use the public copy at `https://huggingface.co/belkassaby/cellpose-sam-onnx/resolve/main/cpsam_fp16.onnx` (once published in M6 follow-up).
+1. **The model**: `cpsam_fp16.onnx` (588 MB). Either upload to your own CDN, or use the public copy at `https://huggingface.co/ballon999/cellpose-sam-onnx/resolve/main/cpsam_fp16.onnx` (once published in M6 follow-up).
 2. **ORT-web's WASM/JSEP sidecars**: ORT dynamically imports `.mjs` and `.wasm` files at runtime. They must be served **same-origin** with your app (cross-origin dynamic `import()` is blocked). Either copy `node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.{wasm,mjs,jsep.wasm,jsep.mjs,asyncify.wasm,asyncify.mjs}` to your public assets, or proxy `/ort/*` to jsDelivr at build time (see `examples/demo/vite.config.ts` for the recipe).
 
 ## Quickstart

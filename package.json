@@ -1,0 +1,54 @@
+{
+  "name": "cellpose-js",
+  "version": "0.0.1",
+  "description": "Browser-side cellular segmentation via Cellpose-SAM, running on WebGPU.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Baha Elkassaby",
+  "keywords": [
+    "cellpose",
+    "segmentation",
+    "webgpu",
+    "onnx",
+    "microscopy",
+    "cell-segmentation"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/cellpose-js.js",
+  "module": "./dist/cellpose-js.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/cellpose-js.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc --emitDeclarationOnly --outDir dist",
+    "dev": "vite",
+    "demo": "vite serve examples/demo",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "onnxruntime-web": "~1.26.0"
+  },
+  "dependencies": {
+    "idb-keyval": "^6.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@webgpu/types": "^0.1.70",
+    "onnxruntime-web": "~1.26.0",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

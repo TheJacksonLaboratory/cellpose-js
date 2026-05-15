@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8">
+<title>cellpose-js Milestone 1 demo</title>
+<style>
+  body { font: 14px/1.5 -apple-system, sans-serif; max-width: 760px; margin: 2em auto; padding: 0 1em; }
+  pre  { background: #f4f4f4; padding: 1em; overflow: auto; white-space: pre-wrap; }
+  button { font-size: 16px; padding: .5em 1em; }
+  input { font-size: 14px; padding: .25em .5em; }
+  .pass { color: #0a0 } .fail { color: #c00 } .warn { color: #c80 }
+  .muted { color: #888 }
+</style>
+</head><body>
+<h1>cellpose-js Milestone 1 demo</h1>
+<p class="muted">Exercises the public API end-to-end: <code>Cellpose.fromPretrained()</code>
+   + <code>segmentRawTile()</code>. Loads a 588 MB FP16 ONNX with IndexedDB caching.
+   First run hits the network; reload should be near-instant.</p>
+<p>
+  Model URL: <input id="modelUrl" value="/cpsam_fp16.onnx" size="50">
+</p>
+<p>
+  <label><input type="checkbox" id="preload" checked> preload session</label>
+  <label><input type="checkbox" id="bypassCache"> bypass cache</label>
+  <button id="go">Run</button>
+  <button id="clear">Clear cached model</button>
+</p>
+<pre id="log">ready.</pre>
+<script type="module" src="./main.ts"></script>
+</body></html>

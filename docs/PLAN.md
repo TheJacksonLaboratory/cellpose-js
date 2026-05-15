@@ -11,7 +11,7 @@ Browser-side Cellpose-SAM via a new `Cellpose.js` package, consumed by jit-ui as
 
 ---
 
-## Phase 1 status (as of 2026-05-15): SHIPPING
+## Phase 1 status (as of 2026-05-15): COMPLETE — v0.1.0
 
 | Stage / Milestone | Status | Commit |
 |---|---|---|
@@ -22,7 +22,7 @@ Browser-side Cellpose-SAM via a new `Cellpose.js` package, consumed by jit-ui as
 | M4 — flow dynamics postprocessing (Euler + cluster + filter) | ✅ DONE (algo) — [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md) | `ddd5dc7` |
 | M5 — tile coherence (**pivoted** to averaging-then-single-dynamics) | ✅ DONE — [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md) | `8829838` |
 | M6 — package polish + HF Hub upload + GitHub publish | ✅ DONE (no npm publish — local-only per scope) | `df1218d`, `08e8564`, `a5e8319`, `73a3eb7` |
-| M7 — jit-ui integration | ⏳ IN PROGRESS — engine + UI working end-to-end; verdict memo pending | (jit-ui local) |
+| M7 — jit-ui integration | ✅ DONE — [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md) | (jit-ui local; not committed per scope) |
 
 ### Phase 1 headline numbers (M1 Max, Chrome 135+, WebGPU)
 
@@ -198,7 +198,7 @@ Euler integration).
 | 4 | Flow dynamics post-processing port (`cellpose.dynamics`): Euler integration, convergence clustering, connected components, size + flow-consistency filtering | 5 days | **✅ DONE** (`ddd5dc7`) — single-cell IoU 1.000, empty 1.000; 20-real-image rig deferred |
 | 5 | Tile stitching with IoU-based label merging in overlap regions | 2 days | **✅ DONE — pivoted** (`8829838`) — replaced with `average_tiles` + single full-image dynamics (Python's actual approach; same asymptotic complexity, better constants) |
 | 6 | API polish, README with quality + perf numbers, npm publish | 2 days | **✅ DONE** except npm publish (scoped local-only) — `df1218d`, `08e8564`, `a5e8319`, `73a3eb7` |
-| 7 | **jit-ui integration** | 2 days | **⏳ IN PROGRESS** — engine + UI wired in; user-side end-to-end verification ongoing |
+| 7 | **jit-ui integration** | 2 days | **✅ DONE** — [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md). All four plan-mandated gates pass (visible, runs, overlays masks, abortable) |
 
 **Total:** ~3.5 weeks of focused work, assuming both spikes pass.
 
@@ -275,7 +275,7 @@ Implement in pure JS first for correctness, profile, promote hot loops to WASM o
 
 ### Milestone 7 — jit-ui integration
 
-**Status:** ⏳ IN PROGRESS — engine code in jit-ui working tree, end-to-end exercised through the pipeline dialog on real images. Verdict memo pending the formal browser-verification checklist (model load, mask overlay, abort latency, diameter memory guard). Deviations and additions vs the original plan:
+**Status:** ✅ DONE — full report: [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md). Browser-verified on M1 Max + Chrome 135+ on 2026-05-15. Cold start ~9–14 s (588 MB fetch + session create + first-tile compile); warm-cache runs ~1.85–2.62 s for 6–9 tiles; abort latency <50 ms. All four plan-mandated gates pass. Deviations and additions vs the original plan:
 
 - **No jit-ui-side worker.** Plan said spawn a `cellpose.worker.ts` modeled on `transformers.worker.ts`. Skipped — `cellpose-js` already encapsulates its own inference worker, so wrapping it again would be a redundant hop. The engine calls `cp.segment()` directly from the main thread; UI stays responsive because the work is already off-thread inside the package.
 - **Allow-list isn't the right list.** Plan said add `'cellpose-segment'` to `image-processing.component.ts:17`. That allow-list controls "region-aware" ops (diagram-prompted segmentation). cellpose-segment isn't region-aware, so no change needed there.

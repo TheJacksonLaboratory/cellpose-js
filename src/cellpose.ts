@@ -7,6 +7,12 @@ import * as ort from 'onnxruntime-web/webgpu';
 import { assertSupportedEnvironment, describeAdapter } from './env.js';
 import { fetchModel, type FetchProgress } from './model-cache.js';
 import { CellposeSession, type SessionOptions } from './session.js';
+import {
+  buildCpsamChannels, type ChannelMapOptions,
+  diameterResize,
+  normalizePerChannel, type NormalizeOptions,
+  makeTiles, type TileRecord,
+} from './preprocess/index.js';
 
 export interface FromPretrainedOptions extends SessionOptions {
   /** Eagerly create the ORT session at construct time (recommended).
@@ -19,16 +25,59 @@ export interface FromPretrainedOptions extends SessionOptions {
 }
 
 /**
- * Milestone-1 segment() output: the raw model tensors converted to FP32.
- * Milestone 4 will add `masks`, `count`, etc. once the flow-dynamics
- * postprocessing is wired up.
+ * Per-tile inference output. Milestone 4 will collapse these into a single
+ * instance label map; for M2 we expose the per-tile flows for inspection.
  */
+export interface SegmentTileOutput {
+  /** Raw model output `flows_cellprob` for this tile, shape (1, 3, bsize, bsize), FP32. */
+  flows_cellprob: Float32Array;
+  /** Tile origin in the resized image's pixel coordinates. */
+  tx: number;
+  ty: number;
+  /** Tile size (square, matches model input). */
+  bsize: number;
+  /** Wall-clock ms in this tile's sess.run. */
+  inferenceMs: number;
+}
+
+export interface SegmentInput {
+  /** Pixel-interleaved source data. RGBA (length = 4*w*h), RGB (3*w*h), or grayscale (w*h). */
+  data: Uint8ClampedArray | Uint8Array | Float32Array;
+  width: number;
+  height: number;
+  /** Channel count of `data`. 1, 3, or 4. */
+  channels: number;
+}
+
+export interface SegmentOptions extends ChannelMapOptions {
+  /** Estimated cell diameter in source-image pixels. If provided, image is
+   *  resized so target diameter = 30 px (CPSAM's training median). */
+  diameter?: number;
+  /** Tile size. Default 256 (matches CPSAM's training bsize). */
+  tile?: number;
+  /** Tile overlap fraction in [0.05, 0.5]. Default 0.1. */
+  overlap?: number;
+  /** Percentile normalization knobs. */
+  normalize?: NormalizeOptions;
+}
+
+export interface SegmentOutput {
+  /** Per-tile model outputs. M5 will stitch these into a single label map. */
+  tiles: SegmentTileOutput[];
+  /** Resized image dimensions (after diameter rescale; equal to input if no resize). */
+  resizedWidth: number;
+  resizedHeight: number;
+  /** Scale factor applied (resized = source * scale). */
+  scale: number;
+  /** Wall-clock ms across the whole segment() call. */
+  totalMs: number;
+}
+
+/** @deprecated kept for M1 demo; use `segment()` instead. */
 export interface SegmentMilestone1Output {
-  /** Raw model output `flows_cellprob`, shape (1, 3, H, W), FP32 (converted from FP16). */
   flows_cellprob: Float32Array;
   height: number;
   width: number;
-  /** Milliseconds spent in `sess.run()` for this call. */
   inferenceMs: number;
 }
 
@@ -107,6 +156,46 @@ export class Cellpose {
     for (let i = 0; i < outF16.length; i++) outF32[i] = outF16[i] as number;
 
     return { flows_cellprob: outF32, height, width, inferenceMs };
+  }
+
+  /**
+   * Full preprocess + per-tile inference. Returns per-tile flows; tile
+   * stitching into a global instance label map is M5 work.
+   */
+  async segment(input: SegmentInput, opts: SegmentOptions = {}): Promise<SegmentOutput> {
+    const t0 = performance.now();
+    const { data, width, height, channels } = input;
+    const tileSize = opts.tile ?? 256;
+
+    // 1) Build CPSAM's 3-channel CHW input.
+    let chw = buildCpsamChannels(data, width, height, channels, opts);
+    let w = width, h = height, scale = 1;
+
+    // 2) Optional diameter-aware resize.
+    if (opts.diameter !== undefined) {
+      const r = diameterResize(chw, w, h, { channels: 3, diameter: opts.diameter });
+      chw = r.data; w = r.width; h = r.height; scale = r.scale;
+    }
+
+    // 3) Per-channel percentile normalization.
+    chw = normalizePerChannel(chw, 3, w * h, opts.normalize ?? {});
+
+    // 4) Tile (always 3 channels at this point, always bsize x bsize tiles).
+    const tileOpts: { bsize: number; overlap?: number } = { bsize: tileSize };
+    if (opts.overlap !== undefined) tileOpts.overlap = opts.overlap;
+    const tiles: TileRecord[] = makeTiles(chw, w, h, 3, tileOpts);
+
+    // 5) Run model on each tile.
+    const out: SegmentTileOutput[] = [];
+    for (const t of tiles) {
+      const r = await this.segmentRawTile(t.tile, tileSize, tileSize);
+      out.push({
+        flows_cellprob: r.flows_cellprob,
+        tx: t.tx, ty: t.ty, bsize: tileSize,
+        inferenceMs: r.inferenceMs,
+      });
+    }
+    return { tiles: out, resizedWidth: w, resizedHeight: h, scale, totalMs: performance.now() - t0 };
   }
 
   /** Release GPU resources. */

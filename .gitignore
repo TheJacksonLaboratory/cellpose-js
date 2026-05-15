@@ -7,3 +7,4 @@ dist/
 .vscode/
 coverage/
 examples/demo/public/
+tests/fixtures

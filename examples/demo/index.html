@@ -40,10 +40,8 @@
 <pre id="log">load a model URL and an image (or synthetic), then Run.</pre>
 <div class="canvases">
   <div><div class="muted">input</div><canvas id="inputCanvas"></canvas></div>
-  <div><div class="muted">flow_y (tile 0)</div><canvas id="flowYCanvas"></canvas></div>
-  <div><div class="muted">flow_x (tile 0)</div><canvas id="flowXCanvas"></canvas></div>
-  <div><div class="muted">cellprob (tile 0)</div><canvas id="cellprobCanvas"></canvas></div>
-  <div><div class="muted">masks (tile 0)</div><canvas id="masksCanvas"></canvas></div>
+  <div><div class="muted">masks (full image)</div><canvas id="masksFullCanvas"></canvas></div>
+  <div><div class="muted">cellprob (tile 0, diagnostic)</div><canvas id="cellprobCanvas"></canvas></div>
 </div>
 <script type="module" src="./main.ts"></script>
 </body></html>

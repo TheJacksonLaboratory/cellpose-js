@@ -10,7 +10,7 @@ import {
   normalizePerChannel, type NormalizeOptions,
   makeTiles, type TileRecord,
 } from './preprocess/index.js';
-import { computeMasks, type ComputeMasksOptions } from './postprocess/index.js';
+import { computeMasks, type ComputeMasksOptions, averageTiles } from './postprocess/index.js';
 import type { MainToWorker, WorkerToMain } from './worker-protocol.js';
 
 const DEFAULT_WASM_PATHS = '/ort/'; // overridable via opts.wasmPaths
@@ -28,16 +28,10 @@ export interface FromPretrainedOptions {
 
 export interface SegmentTileOutput {
   flows_cellprob: Float32Array;
-  /** Instance label map for this tile, (bsize, bsize) row-major. 0 = background. */
-  masks: Uint32Array;
-  /** Number of instances in this tile (max label). */
-  maskCount: number;
   tx: number;
   ty: number;
   bsize: number;
   inferenceMs: number;
-  /** Wall-clock ms spent in dynamics for this tile. */
-  dynamicsMs: number;
 }
 
 export interface SegmentInput {
@@ -61,11 +55,26 @@ export interface SegmentOptions extends ChannelMapOptions {
 }
 
 export interface SegmentOutput {
+  /** Full-image instance label map at SOURCE-image resolution (after inverse
+   *  resize). 0 = background. Row-major Uint32Array of length sourceW * sourceH. */
+  masks: Uint32Array;
+  /** Number of distinct instances in `masks`. */
+  count: number;
+  /** Width / height at source resolution. */
+  width: number;
+  height: number;
+  /** Per-tile diagnostics. Per-tile masks are NOT included (single global label
+   *  map is the v1 contract). */
   tiles: SegmentTileOutput[];
+  /** Resized image dimensions (intermediate; pre-inverse-resize). */
   resizedWidth: number;
   resizedHeight: number;
+  /** Scale factor applied (resized = source * scale). */
   scale: number;
+  /** Total wall-clock ms for the full segment() call. */
   totalMs: number;
+  /** Wall-clock ms in the average+dynamics step (excludes per-tile inference). */
+  postprocessMs: number;
 }
 
 /** @deprecated kept for legacy demo; use `segment()`. */
@@ -228,26 +237,59 @@ export class Cellpose {
       for (let i = 0; i < tiles.length; i++) {
         const t = tiles[i]!;
         const r = await this._runTile(t.tile, tileSize);
-        // Split flows_cellprob: dy = ch0, dx = ch1, cellprob = ch2
-        const hw = tileSize * tileSize;
-        const dP = new Float32Array(2 * hw);
-        dP.set(r.flowsCellprob.subarray(0, hw),         0);     // dy
-        dP.set(r.flowsCellprob.subarray(hw, 2 * hw),    hw);    // dx
-        const cellprob = r.flowsCellprob.subarray(2 * hw, 3 * hw) as Float32Array;
-        const tDyn = performance.now();
-        const masks = computeMasks(dP, cellprob, tileSize, tileSize, opts.dynamics ?? {});
-        const dynamicsMs = performance.now() - tDyn;
         out.push({
           flows_cellprob: r.flowsCellprob,
-          masks: masks.masks,
-          maskCount: masks.count,
           tx: t.tx, ty: t.ty, bsize: tileSize,
           inferenceMs: r.inferenceMs,
-          dynamicsMs,
         });
         opts.onTileProgress?.(i + 1, tiles.length);
       }
-      return { tiles: out, resizedWidth: w, resizedHeight: h, scale, totalMs: performance.now() - t0 };
+
+      // Average overlapping tile predictions into a single full-image tensor,
+      // then run dynamics once. See average_tiles.ts header for why this is the
+      // right algorithm choice (vs per-tile dynamics + label stitching).
+      const tPost = performance.now();
+      const averaged = averageTiles(
+        out.map(o => ({ flowsCellprob: o.flows_cellprob, tx: o.tx, ty: o.ty, bsize: o.bsize })),
+        h, w,
+      );
+      const hwFull = h * w;
+      const dPFull = averaged.data.subarray(0, 2 * hwFull) as Float32Array;
+      const cpFull = averaged.data.subarray(2 * hwFull, 3 * hwFull) as Float32Array;
+      const m = computeMasks(dPFull, cpFull, h, w, opts.dynamics ?? {});
+
+      // Inverse-resize labels back to source resolution if a diameter resize
+      // was applied (nearest-neighbor — labels must not be interpolated).
+      let masksSrc = m.masks;
+      let outW = w, outH = h;
+      if (scale !== 1) {
+        outW = input.width;
+        outH = input.height;
+        const resized = new Uint32Array(outW * outH);
+        for (let yy = 0; yy < outH; yy++) {
+          const sy = Math.min(h - 1, Math.max(0, Math.round(yy * scale)));
+          const srcRow = sy * w;
+          const dstRow = yy * outW;
+          for (let xx = 0; xx < outW; xx++) {
+            const sx = Math.min(w - 1, Math.max(0, Math.round(xx * scale)));
+            resized[dstRow + xx] = m.masks[srcRow + sx] as number;
+          }
+        }
+        masksSrc = resized;
+      }
+      const postprocessMs = performance.now() - tPost;
+      return {
+        masks: masksSrc,
+        count: m.count,
+        width: outW,
+        height: outH,
+        tiles: out,
+        resizedWidth: w,
+        resizedHeight: h,
+        scale,
+        totalMs: performance.now() - t0,
+        postprocessMs,
+      };
     } finally {
       if (signal && abortListener) signal.removeEventListener('abort', abortListener);
     }

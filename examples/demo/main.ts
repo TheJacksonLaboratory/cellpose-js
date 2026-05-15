@@ -180,19 +180,16 @@ async function run() {
     const median = infTimes[Math.floor(infTimes.length/2)] ?? 0;
     log(`per-tile inference median: ${fmt(median)}  total: ${fmt(r.totalMs)}`);
 
-    // Visualize tile 0 channels
+    // Full-image mask overlay (M5 returns a single stitched label map).
+    drawMaskOverlay($('masksFullCanvas') as HTMLCanvasElement, r.masks, r.width, r.height);
+    // Diagnostic: cellprob heatmap from tile 0 (mostly for debugging when masks look wrong).
     const t0 = r.tiles[0]!;
     const B = t0.bsize;
     const hw = B * B;
-    drawHeatmap($('flowYCanvas') as HTMLCanvasElement, t0.flows_cellprob.subarray(0, hw),        B, B);
-    drawHeatmap($('flowXCanvas') as HTMLCanvasElement, t0.flows_cellprob.subarray(hw, 2*hw),     B, B);
     drawHeatmap($('cellprobCanvas') as HTMLCanvasElement, t0.flows_cellprob.subarray(2*hw, 3*hw), B, B);
-    drawMaskOverlay($('masksCanvas') as HTMLCanvasElement, t0.masks, B, B);
-    const totalMasks = r.tiles.reduce((sum, t) => sum + t.maskCount, 0);
-    const totalDynMs = r.tiles.reduce((sum, t) => sum + t.dynamicsMs, 0);
-    log(`masks: ${totalMasks} total across tiles  (tile 0: ${t0.maskCount})`);
-    log(`dynamics: ${totalDynMs.toFixed(0)} ms total`);
-    log('GATE: PASS (preprocess + inference + dynamics complete; tile stitching is M5)', 'pass');
+    log(`masks (stitched, full image): ${r.count}`);
+    log(`postprocess (average + dynamics): ${r.postprocessMs.toFixed(0)} ms`);
+    log('GATE: PASS (full pipeline: preprocess + per-tile inference + average + dynamics)', 'pass');
   } catch (err: unknown) {
     const e = err as Error;
     if (e instanceof UnsupportedEnvironmentError) log(`ENV: ${e.message}`, 'fail');

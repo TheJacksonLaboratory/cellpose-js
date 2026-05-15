@@ -7,5 +7,3 @@ dist/
 .vscode/
 coverage/
 examples/demo/public/
-tests/fixtures
-tests/fixtures_dyn

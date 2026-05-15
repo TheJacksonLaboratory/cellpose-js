@@ -4,6 +4,7 @@
  */
 import { assertSupportedEnvironment, describeAdapter } from './env.js';
 import { fetchModel, type FetchProgress } from './model-cache.js';
+import { configureOrt, _getWasmPaths } from './session.js';
 import {
   buildCpsamChannels, type ChannelMapOptions,
   diameterResize,
@@ -12,8 +13,6 @@ import {
 } from './preprocess/index.js';
 import { computeMasks, type ComputeMasksOptions, averageTiles } from './postprocess/index.js';
 import type { MainToWorker, WorkerToMain } from './worker-protocol.js';
-
-const DEFAULT_WASM_PATHS = '/ort/'; // overridable via opts.wasmPaths
 
 export interface FromPretrainedOptions {
   /** Eagerly create the inference worker + ORT session at construct time. */
@@ -103,7 +102,6 @@ export class Cellpose {
   private constructor(
     modelBytes: ArrayBuffer,
     private readonly _modelUrl: string,
-    private readonly _wasmPaths: string
   ) {
     this._modelBytes = modelBytes;
   }
@@ -116,7 +114,8 @@ export class Cellpose {
       ...(opts.signal      !== undefined && { signal: opts.signal }),
     };
     const bytes = await fetchModel(modelUrl, fetchOpts);
-    const cp = new Cellpose(bytes, modelUrl, opts.wasmPaths ?? DEFAULT_WASM_PATHS);
+    if (opts.wasmPaths) configureOrt({ wasmPaths: opts.wasmPaths });
+    const cp = new Cellpose(bytes, modelUrl);
     if (opts.preload) await cp._ensureWorker();
     return cp;
   }
@@ -177,7 +176,7 @@ export class Cellpose {
       };
       ensureBytes().then((bytes) => {
         this._modelBytes = null; // drop our ref since we're about to transfer ownership
-        const init: MainToWorker = { type: 'init', modelBytes: bytes, wasmPaths: this._wasmPaths };
+        const init: MainToWorker = { type: 'init', modelBytes: bytes, wasmPaths: _getWasmPaths() };
         worker.postMessage(init, [bytes]);
       }).catch(reject);
     });

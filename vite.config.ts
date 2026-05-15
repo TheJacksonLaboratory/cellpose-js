@@ -16,4 +16,14 @@ export default defineConfig({
     sourcemap: true,
     target: 'es2022',
   },
+  // Worker chunks get their own Rollup build. Without this `external` rule
+  // ort-web gets inlined into the worker, producing a ~63 MB chunk. With it
+  // the worker chunk stays under ~5 kB and the consumer's bundler resolves
+  // ort-web at runtime.
+  worker: {
+    format: 'es',
+    rollupOptions: {
+      external: ['onnxruntime-web', 'onnxruntime-web/webgpu'],
+    },
+  },
 });

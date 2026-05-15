@@ -36,7 +36,7 @@ Browser-side Cellpose-SAM via a new `Cellpose.js` package, consumed by jit-ui as
 ### Shipping artifacts
 
 - **GitHub:** https://github.com/belkassaby/Cellpose.js (public, MIT).
-- **Model on HF Hub:** https://huggingface.co/Ballon999/cellpose-sam-onnx (public; 588 MB FP16 ONNX). Note the HF account is `Ballon999`, not `belkassaby` as earlier drafts of this plan suggested — both belong to the same person.
+- **Model on HF Hub:** https://huggingface.co/ballon999/cellpose-sam-onnx (public; 588 MB FP16 ONNX). Note the HF account is `Ballon999`, not `belkassaby` as earlier drafts of this plan suggested — both belong to the same person.
 - **jit-ui consumer:** new `cellpose-engine.ts` registered alongside the existing engines; new `cellpose-segment` op visible in the pipeline dialog.
 
 ### Deviations from the original plan
@@ -45,7 +45,7 @@ Browser-side Cellpose-SAM via a new `Cellpose.js` package, consumed by jit-ui as
 2. **M6 build switch.** Plan called for Vite library mode. The Vite output emitted absolute worker URLs (`/assets/inference.worker-XXXX.js`) that webpack-based consumers (jit-ui) couldn't resolve. Switched the publish build to plain `tsc` so `new Worker(new URL('./inference.worker.js', import.meta.url))` stays relative and any modern bundler resolves it. Vite is still used for the demo dev server.
 3. **M3 worker bundling.** Library-mode emitted a 63 MB worker chunk (inlined ort-web). M6 added `worker.rollupOptions.external` to keep it under 5 KB; consumers now bring their own `onnxruntime-web` peer.
 4. **ORT version drift.** Plan specified ORT-web 1.20.1. `npm install` resolved `^1.20.1` to 1.26.0, which turned out to be **~2.3× faster** on the WebGPU kernels (277 ms vs 628 ms). We kept it and re-pinned `~1.26.0` to lock the version against the demo's proxy URL.
-5. **HF Hub account.** Plan referenced `belkassaby/cellpose-sam-onnx`; actual upload lives at `Ballon999/cellpose-sam-onnx` (same person, different HF username). All references in this plan and downstream code use the actual URL.
+5. **HF Hub account.** Plan referenced `belkassaby/cellpose-sam-onnx`; actual upload lives at `ballon999/cellpose-sam-onnx` (same person, different HF username). All references in this plan and downstream code use the actual URL.
 6. **M7 added UX work beyond the plan.** While integrating into jit-ui's pipeline dialog, we added: a determinate progress bar for the 588 MB cold download (replaces the indeterminate spinner), per-phase status messages (`Preprocessing image…`, `Running inference (tile 3 / 9)…`, `Computing flow dynamics…`), and `requiresManualRun` gating on the operation descriptor so heavy ops show a "Run" button instead of re-executing on every param change. The descriptor flag also tags every existing `transformers-js` op (which had the same auto-rerun problem).
 7. **M4/M5 IoU rig deferred.** Plan exit criteria asked for mean IoU ≥ 0.9 (M4) and ≥ 0.85 (M5) against a **20-real-CPSAM-image** reference set. The synthetic fixtures we built validate the algorithms (single-cell IoU 1.000, empty 1.000, three-cells 0.601 due to overlap-zone noise). The 20-image real-output rig is filed as a Phase 1 follow-up rather than a blocker; jit-ui browser verification is already producing visually-sensible masks on real microscopy images.
 
@@ -278,7 +278,7 @@ Implement in pure JS first for correctness, profile, promote hot loops to WASM o
 
 ### Milestone 6 — Polish & publish
 
-**Status:** ✅ DONE (no npm publish, by scope decision). Commits: `df1218d` (initial polish), `08e8564` (HF Hub URL in demo), `a5e8319` (tsc build switch + memory cap), `73a3eb7` (docs import). M6 deviated in two ways: (a) switched the public build from Vite library mode to plain `tsc` after the Vite library build emitted webpack-incompatible worker URLs when consumed by jit-ui; (b) shipped to HF Hub at `Ballon999/cellpose-sam-onnx` and to GitHub at `belkassaby/Cellpose.js`. npm publish remains parked (local-only per scope).
+**Status:** ✅ DONE (no npm publish, by scope decision). Commits: `df1218d` (initial polish), `08e8564` (HF Hub URL in demo), `a5e8319` (tsc build switch + memory cap), `73a3eb7` (docs import). M6 deviated in two ways: (a) switched the public build from Vite library mode to plain `tsc` after the Vite library build emitted webpack-incompatible worker URLs when consumed by jit-ui; (b) shipped to HF Hub at `ballon999/cellpose-sam-onnx` and to GitHub at `belkassaby/Cellpose.js`. npm publish remains parked (local-only per scope).
 
 - README with quality (IoU vs Python CPSAM) and perf (ms/tile, ms/megapixel) numbers.
 - Versioned npm release.
@@ -400,7 +400,7 @@ structurally but may need finetuning after backbone pruning.
 4. **Export to ONNX FP16**, single-file, same IO contract as Phase 1's CPSAM
    ONNX so `cellpose-js` can swap models transparently.
 
-**Deliverable**: `Ballon999/slimcpsam-onnx` on HF Hub (matches the Phase 1 account `Ballon999/cellpose-sam-onnx`), ~50–150 MB.
+**Deliverable**: `ballon999/slimcpsam-onnx` on HF Hub (matches the Phase 1 account `ballon999/cellpose-sam-onnx`), ~50–150 MB.
 
 ### 7.4 Sub-phase B — Domain-specialized slim finetunes
 
@@ -478,7 +478,7 @@ in IndexedDB. Add a "clear cached models" affordance in jit-ui settings.
 ### Phase 1 shipping artifacts (added 2026-05-15)
 
 - **cellpose-js code** — https://github.com/belkassaby/Cellpose.js (public, MIT). Commits: `a0c1955` (M1), `3035fdf` (M2), `741f340` (M3), `ddd5dc7` (M4), `8829838` (M5), `df1218d` + `08e8564` + `a5e8319` (M6), `73a3eb7` (docs import).
-- **CPSAM FP16 ONNX** — https://huggingface.co/Ballon999/cellpose-sam-onnx (public; 588 MB; ETag `52fd6881…` matches the Stage-0 source SHA-256).
+- **CPSAM FP16 ONNX** — https://huggingface.co/ballon999/cellpose-sam-onnx (public; 588 MB; ETag `52fd6881…` matches the Stage-0 source SHA-256).
 - **Per-milestone result memos** — [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md), [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md), [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md), [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md), [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md), [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md).
 
 ### Upstream references

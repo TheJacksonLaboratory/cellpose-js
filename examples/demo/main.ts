@@ -23,12 +23,15 @@ async function ensureModel(): Promise<Cellpose> {
   const bypassCache = ($('bypassCache') as HTMLInputElement).checked;
   log(`fromPretrained('${modelUrl}', { preload: ${preload}, bypassCache: ${bypassCache} })...`);
   const t0 = performance.now();
+  let lastPctLogged = -1;
   cp = await Cellpose.fromPretrained(modelUrl, {
     preload, bypassCache,
     onProgress: ({ loaded, total }) => {
-      if (total) {
-        const pct = Math.floor((loaded / total) * 100);
-        if (pct % 10 === 0) log(`  fetch: ${pct}%`);
+      if (!total) return;
+      const pct = Math.floor((loaded / total) * 100);
+      if (pct >= lastPctLogged + 10 || pct === 100) {
+        log(`  fetch: ${pct}%`);
+        lastPctLogged = pct;
       }
     },
   });
@@ -108,10 +111,14 @@ function makeSynthetic(w = 400, h = 400): SegmentInput {
   return { data, width: w, height: h, channels: 4 };
 }
 
+let activeAbort: AbortController | null = null;
+
 async function run() {
-  logEl.textContent = '';
+  log('--- run ---', 'muted');
   if (!currentImage) { log('no image loaded', 'fail'); return; }
   ($('go') as HTMLButtonElement).disabled = true;
+  ($('abort') as HTMLButtonElement).disabled = false;
+  activeAbort = new AbortController();
   try {
     const model = await ensureModel();
     const adapter = await model.describeAdapter();
@@ -125,7 +132,13 @@ async function run() {
     };
     if (diameterStr) opts.diameter = parseFloat(diameterStr);
 
-    log(`segment(${currentImage.width}x${currentImage.height}, opts=${JSON.stringify(opts)})...`);
+    opts.signal = activeAbort.signal;
+    const totalTiles = { v: 0 };
+    opts.onTileProgress = (done, total) => {
+      totalTiles.v = total;
+      ($('progress') as HTMLSpanElement).textContent = `tile ${done}/${total}`;
+    };
+    log(`segment(${currentImage.width}x${currentImage.height}, opts.tile=${opts.tile}, chan=${opts.chan}, chan2=${opts.chan2}, diameter=${opts.diameter ?? 'auto'})...`);
     const r = await model.segment(currentImage, opts);
     log(`tiles: ${r.tiles.length}  resized: ${r.resizedWidth}x${r.resizedHeight}  scale: ${r.scale.toFixed(3)}`);
     const infTimes = r.tiles.map(t => t.inferenceMs).sort((a, b) => a - b);
@@ -143,10 +156,14 @@ async function run() {
   } catch (err: unknown) {
     const e = err as Error;
     if (e instanceof UnsupportedEnvironmentError) log(`ENV: ${e.message}`, 'fail');
-    else log(`ERROR: ${e.message ?? e}`, 'fail');
+    else if (e?.name === 'AbortError')             log(`ABORTED: ${e.message ?? 'cancelled'}`, 'warn');
+    else                                            log(`ERROR: ${e.message ?? e}`, 'fail');
     console.error(err);
   } finally {
     ($('go') as HTMLButtonElement).disabled = false;
+    ($('abort') as HTMLButtonElement).disabled = true;
+    ($('progress') as HTMLSpanElement).textContent = '';
+    activeAbort = null;
   }
 }
 
@@ -165,6 +182,14 @@ $('useSynthetic').addEventListener('click', () => {
   log(`loaded synthetic: ${currentImage.width}x${currentImage.height}`);
 });
 $('go').addEventListener('click', run);
+$('abort').addEventListener('click', () => {
+  if (activeAbort) {
+    const t = performance.now();
+    activeAbort.abort();
+    log(`abort fired (will measure latency on next tick)`);
+    requestAnimationFrame(() => log(`abort UI tick at ${(performance.now() - t).toFixed(0)} ms`));
+  }
+});
 const clearBtn = document.createElement('button');
 clearBtn.textContent = 'Clear cached model';
 clearBtn.addEventListener('click', async () => {

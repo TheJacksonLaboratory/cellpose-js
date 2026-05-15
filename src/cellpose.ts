@@ -1,79 +1,65 @@
 /**
- * Public Cellpose API. Milestone 1: model loading + identity forward pass.
- * Pre/postprocessing (Milestone 2+) and dynamics (Milestone 4) live in
- * sibling modules added later.
+ * Public Cellpose API. Milestone 3: inference offloaded to a Web Worker,
+ * AbortSignal-driven cancellation, tile-level progress.
  */
-import * as ort from 'onnxruntime-web/webgpu';
 import { assertSupportedEnvironment, describeAdapter } from './env.js';
 import { fetchModel, type FetchProgress } from './model-cache.js';
-import { CellposeSession, type SessionOptions } from './session.js';
 import {
   buildCpsamChannels, type ChannelMapOptions,
   diameterResize,
   normalizePerChannel, type NormalizeOptions,
   makeTiles, type TileRecord,
 } from './preprocess/index.js';
+import type { MainToWorker, WorkerToMain } from './worker-protocol.js';
 
-export interface FromPretrainedOptions extends SessionOptions {
-  /** Eagerly create the ORT session at construct time (recommended).
-   *  Trades ~3.5 s of latency now for a fast first segment() call. */
+const DEFAULT_WASM_PATHS = '/ort/'; // overridable via opts.wasmPaths
+
+export interface FromPretrainedOptions {
+  /** Eagerly create the inference worker + ORT session at construct time. */
   preload?: boolean;
+  /** Override ORT's WASM helper path (must be same-origin for dynamic .mjs imports). */
+  wasmPaths?: string;
   /** Forwarded to the model fetcher. */
   onProgress?: (p: FetchProgress) => void;
   bypassCache?: boolean;
   signal?: AbortSignal;
 }
 
-/**
- * Per-tile inference output. Milestone 4 will collapse these into a single
- * instance label map; for M2 we expose the per-tile flows for inspection.
- */
 export interface SegmentTileOutput {
-  /** Raw model output `flows_cellprob` for this tile, shape (1, 3, bsize, bsize), FP32. */
   flows_cellprob: Float32Array;
-  /** Tile origin in the resized image's pixel coordinates. */
   tx: number;
   ty: number;
-  /** Tile size (square, matches model input). */
   bsize: number;
-  /** Wall-clock ms in this tile's sess.run. */
   inferenceMs: number;
 }
 
 export interface SegmentInput {
-  /** Pixel-interleaved source data. RGBA (length = 4*w*h), RGB (3*w*h), or grayscale (w*h). */
   data: Uint8ClampedArray | Uint8Array | Float32Array;
   width: number;
   height: number;
-  /** Channel count of `data`. 1, 3, or 4. */
   channels: number;
 }
 
 export interface SegmentOptions extends ChannelMapOptions {
-  /** Estimated cell diameter in source-image pixels. If provided, image is
-   *  resized so target diameter = 30 px (CPSAM's training median). */
   diameter?: number;
-  /** Tile size. Default 256 (matches CPSAM's training bsize). */
   tile?: number;
-  /** Tile overlap fraction in [0.05, 0.5]. Default 0.1. */
   overlap?: number;
-  /** Percentile normalization knobs. */
   normalize?: NormalizeOptions;
+  /** Fires after each tile finishes inference. */
+  onTileProgress?: (done: number, total: number) => void;
+  /** Abort the in-flight call. Terminates the worker; next call respawns. */
+  signal?: AbortSignal;
 }
 
 export interface SegmentOutput {
-  /** Per-tile model outputs. M5 will stitch these into a single label map. */
   tiles: SegmentTileOutput[];
-  /** Resized image dimensions (after diameter rescale; equal to input if no resize). */
   resizedWidth: number;
   resizedHeight: number;
-  /** Scale factor applied (resized = source * scale). */
   scale: number;
-  /** Wall-clock ms across the whole segment() call. */
   totalMs: number;
 }
 
-/** @deprecated kept for M1 demo; use `segment()` instead. */
+/** @deprecated kept for legacy demo; use `segment()`. */
 export interface SegmentMilestone1Output {
   flows_cellprob: Float32Array;
   height: number;
@@ -81,126 +67,177 @@ export interface SegmentMilestone1Output {
   inferenceMs: number;
 }
 
+interface PendingTile {
+  resolve: (msg: Extract<WorkerToMain, { type: 'tile-result' }>) => void;
+  reject: (err: Error) => void;
+}
+
 export class Cellpose {
-  private _session: CellposeSession | null = null;
+  private _worker: Worker | null = null;
+  private _workerReady: Promise<void> | null = null;
+  private _adapterInfo: { vendor: string; architecture: string; device: string } | null = null;
+  private _nextTileId = 0;
+  private _pending = new Map<number, PendingTile>();
 
+  // _modelBytes is detached after the worker takes ownership of it. To respawn
+  // after _abort() we re-fetch via fetchModel (cache hit -> instant).
+  private _modelBytes: ArrayBuffer | null;
   private constructor(
-    private readonly _modelBytes: ArrayBuffer,
-    private readonly _sessionOpts: SessionOptions
-  ) {}
+    modelBytes: ArrayBuffer,
+    private readonly _modelUrl: string,
+    private readonly _wasmPaths: string
+  ) {
+    this._modelBytes = modelBytes;
+  }
 
-  /** Construct a Cellpose instance from a URL pointing at an FP16 CPSAM ONNX file. */
   static async fromPretrained(modelUrl: string, opts: FromPretrainedOptions = {}): Promise<Cellpose> {
     assertSupportedEnvironment();
-
     const fetchOpts = {
       ...(opts.onProgress  !== undefined && { onProgress: opts.onProgress }),
       ...(opts.bypassCache !== undefined && { bypassCache: opts.bypassCache }),
       ...(opts.signal      !== undefined && { signal: opts.signal }),
     };
     const bytes = await fetchModel(modelUrl, fetchOpts);
-
-    const sessionOpts: SessionOptions = {
-      ...(opts.wasmPaths !== undefined && { wasmPaths: opts.wasmPaths }),
-    };
-    const cp = new Cellpose(bytes, sessionOpts);
-
-    if (opts.preload) await cp._ensureSession();
+    const cp = new Cellpose(bytes, modelUrl, opts.wasmPaths ?? DEFAULT_WASM_PATHS);
+    if (opts.preload) await cp._ensureWorker();
     return cp;
   }
 
-  /** Returns adapter info for diagnostics. */
-  async describeAdapter(): Promise<{ vendor: string; architecture: string; device: string; } | null> {
+  async describeAdapter(): Promise<{ vendor: string; architecture: string; device: string } | null> {
+    if (this._adapterInfo) return this._adapterInfo;
     return describeAdapter();
   }
 
-  /** Lazy session creation. Idempotent. */
-  private async _ensureSession(): Promise<CellposeSession> {
-    if (!this._session) {
-      this._session = await CellposeSession.create(this._modelBytes, this._sessionOpts);
-    }
-    return this._session;
+  /** Lazy spawn + init. Idempotent. */
+  private _ensureWorker(): Promise<void> {
+    if (this._workerReady) return this._workerReady;
+
+    const worker = new Worker(
+      new URL('./inference.worker.ts', import.meta.url),
+      { type: 'module' }
+    );
+    this._worker = worker;
+
+    worker.addEventListener('message', (ev: MessageEvent<WorkerToMain>) => {
+      const msg = ev.data;
+      if (msg.type === 'tile-result') {
+        const p = this._pending.get(msg.tileId);
+        if (p) { this._pending.delete(msg.tileId); p.resolve(msg); }
+      } else if (msg.type === 'error') {
+        if (msg.tileId !== null) {
+          const p = this._pending.get(msg.tileId);
+          if (p) { this._pending.delete(msg.tileId); p.reject(new Error(msg.message)); }
+        }
+      }
+    });
+    worker.addEventListener('error', (ev) => {
+      const err = new Error(ev.message || 'worker error');
+      for (const p of this._pending.values()) p.reject(err);
+      this._pending.clear();
+    });
+
+    this._workerReady = new Promise<void>((resolve, reject) => {
+      const onReady = (ev: MessageEvent<WorkerToMain>) => {
+        if (ev.data.type === 'ready') {
+          this._adapterInfo = ev.data.adapterInfo;
+          worker.removeEventListener('message', onReady);
+          resolve();
+        } else if (ev.data.type === 'error' && ev.data.tileId === null) {
+          worker.removeEventListener('message', onReady);
+          reject(new Error(ev.data.message));
+        }
+      };
+      worker.addEventListener('message', onReady);
+
+      // Resolve model bytes. If the previous worker took ownership (transfer
+      // detached the buffer), refetch from IDB cache — typically <100 ms.
+      const ensureBytes = async (): Promise<ArrayBuffer> => {
+        if (this._modelBytes && this._modelBytes.byteLength > 0) return this._modelBytes;
+        const bytes = await fetchModel(this._modelUrl);
+        this._modelBytes = bytes;
+        return bytes;
+      };
+      ensureBytes().then((bytes) => {
+        this._modelBytes = null; // drop our ref since we're about to transfer ownership
+        const init: MainToWorker = { type: 'init', modelBytes: bytes, wasmPaths: this._wasmPaths };
+        worker.postMessage(init, [bytes]);
+      }).catch(reject);
+    });
+    return this._workerReady;
   }
 
-  /**
-   * Milestone 1 stub: run a single (1, 3, 256, 256) forward pass.
-   *
-   * `input` is FP32 in NCHW order with values already preprocessed by the
-   * caller. Milestone 2 will move preprocessing inside this method.
-   */
-  async segmentRawTile(input: Float32Array, height = 256, width = 256): Promise<SegmentMilestone1Output> {
-    if (input.length !== 1 * 3 * height * width) {
-      throw new Error(`segmentRawTile: expected ${1 * 3 * height * width} floats, got ${input.length}`);
-    }
-    const sess = await this._ensureSession();
-
-    // FP32 -> FP16 at the model boundary.
-    const fp16 = new Float16Array(input.length);
-    for (let i = 0; i < input.length; i++) fp16[i] = input[i] as number;
-    const tensor = new ort.Tensor('float16', fp16 as unknown as Uint16Array, [1, 3, height, width]);
-
-    const t0 = performance.now();
-    const outputs = await sess.run({ [sess.inputNames[0] as string]: tensor });
-    const inferenceMs = performance.now() - t0;
-
-    const out = outputs['flows_cellprob'];
-    if (!out) throw new Error(`Missing output 'flows_cellprob' (got: ${Object.keys(outputs).join(', ')})`);
-
-    // FP16 -> FP32 at the model boundary. ort.Tensor.data for float16 is a
-    // Uint16Array view of bit patterns; Float16Array re-interprets those
-    // when constructed from the same ArrayBuffer.
-    const outF16 = new Float16Array((out.data as Uint16Array).buffer,
-                                    (out.data as Uint16Array).byteOffset,
-                                    (out.data as Uint16Array).length);
-    const outF32 = new Float32Array(outF16.length);
-    for (let i = 0; i < outF16.length; i++) outF32[i] = outF16[i] as number;
-
-    return { flows_cellprob: outF32, height, width, inferenceMs };
+  /** Aborts the worker mid-run; pending tile promises reject with AbortError. */
+  private _abort(reason?: string): void {
+    if (!this._worker) return;
+    this._worker.terminate();
+    this._worker = null;
+    this._workerReady = null;
+    const err = new DOMException(reason ?? 'Operation aborted', 'AbortError');
+    for (const p of this._pending.values()) p.reject(err);
+    this._pending.clear();
   }
 
-  /**
-   * Full preprocess + per-tile inference. Returns per-tile flows; tile
-   * stitching into a global instance label map is M5 work.
-   */
+  private async _runTile(tile: Float32Array, bsize: number): Promise<Extract<WorkerToMain, { type: 'tile-result' }>> {
+    await this._ensureWorker();
+    const worker = this._worker;
+    if (!worker) throw new Error('worker not available');
+    const tileId = this._nextTileId++;
+    return new Promise<Extract<WorkerToMain, { type: 'tile-result' }>>((resolve, reject) => {
+      this._pending.set(tileId, { resolve, reject });
+      const msg: MainToWorker = { type: 'run-tile', tileId, tile, bsize };
+      worker.postMessage(msg, [tile.buffer]);
+    });
+  }
+
   async segment(input: SegmentInput, opts: SegmentOptions = {}): Promise<SegmentOutput> {
     const t0 = performance.now();
-    const { data, width, height, channels } = input;
     const tileSize = opts.tile ?? 256;
+    const signal = opts.signal;
 
-    // 1) Build CPSAM's 3-channel CHW input.
-    let chw = buildCpsamChannels(data, width, height, channels, opts);
-    let w = width, h = height, scale = 1;
-
-    // 2) Optional diameter-aware resize.
-    if (opts.diameter !== undefined) {
-      const r = diameterResize(chw, w, h, { channels: 3, diameter: opts.diameter });
-      chw = r.data; w = r.width; h = r.height; scale = r.scale;
+    // Hook abort: terminate the worker, surface AbortError to the caller.
+    let abortListener: (() => void) | null = null;
+    if (signal) {
+      if (signal.aborted) throw new DOMException('Aborted before start', 'AbortError');
+      abortListener = () => this._abort(signal.reason instanceof Error ? signal.reason.message : undefined);
+      signal.addEventListener('abort', abortListener);
     }
 
-    // 3) Per-channel percentile normalization.
-    chw = normalizePerChannel(chw, 3, w * h, opts.normalize ?? {});
+    try {
+      let chw = buildCpsamChannels(input.data, input.width, input.height, input.channels, opts);
+      let w = input.width, h = input.height, scale = 1;
+      if (opts.diameter !== undefined) {
+        const r = diameterResize(chw, w, h, { channels: 3, diameter: opts.diameter });
+        chw = r.data; w = r.width; h = r.height; scale = r.scale;
+      }
+      chw = normalizePerChannel(chw, 3, w * h, opts.normalize ?? {});
 
-    // 4) Tile (always 3 channels at this point, always bsize x bsize tiles).
-    const tileOpts: { bsize: number; overlap?: number } = { bsize: tileSize };
-    if (opts.overlap !== undefined) tileOpts.overlap = opts.overlap;
-    const tiles: TileRecord[] = makeTiles(chw, w, h, 3, tileOpts);
+      const tileOpts: { bsize: number; overlap?: number } = { bsize: tileSize };
+      if (opts.overlap !== undefined) tileOpts.overlap = opts.overlap;
+      const tiles: TileRecord[] = makeTiles(chw, w, h, 3, tileOpts);
 
-    // 5) Run model on each tile.
-    const out: SegmentTileOutput[] = [];
-    for (const t of tiles) {
-      const r = await this.segmentRawTile(t.tile, tileSize, tileSize);
-      out.push({
-        flows_cellprob: r.flows_cellprob,
-        tx: t.tx, ty: t.ty, bsize: tileSize,
-        inferenceMs: r.inferenceMs,
-      });
+      const out: SegmentTileOutput[] = [];
+      for (let i = 0; i < tiles.length; i++) {
+        const t = tiles[i]!;
+        const r = await this._runTile(t.tile, tileSize);
+        out.push({
+          flows_cellprob: r.flowsCellprob,
+          tx: t.tx, ty: t.ty, bsize: tileSize,
+          inferenceMs: r.inferenceMs,
+        });
+        opts.onTileProgress?.(i + 1, tiles.length);
+      }
+      return { tiles: out, resizedWidth: w, resizedHeight: h, scale, totalMs: performance.now() - t0 };
+    } finally {
+      if (signal && abortListener) signal.removeEventListener('abort', abortListener);
     }
-    return { tiles: out, resizedWidth: w, resizedHeight: h, scale, totalMs: performance.now() - t0 };
   }
 
-  /** Release GPU resources. */
   async dispose(): Promise<void> {
-    await this._session?.dispose();
-    this._session = null;
+    if (!this._worker) return;
+    this._worker.postMessage({ type: 'dispose' } satisfies MainToWorker);
+    this._worker.terminate();
+    this._worker = null;
+    this._workerReady = null;
+    this._pending.clear();
   }
 }

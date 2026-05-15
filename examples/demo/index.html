@@ -1,47 +1,116 @@
 <!doctype html>
-<html><head>
-<meta charset="utf-8">
-<title>cellpose-js M2 demo</title>
-<style>
-  body { font: 14px/1.5 -apple-system, sans-serif; max-width: 900px; margin: 2em auto; padding: 0 1em; }
-  pre  { background: #f4f4f4; padding: 1em; overflow: auto; white-space: pre-wrap; max-height: 360px; }
-  button { font-size: 16px; padding: .5em 1em; }
-  input { font-size: 14px; padding: .25em .5em; }
-  .row { display: flex; gap: .5em; align-items: center; flex-wrap: wrap; margin: .25em 0; }
-  .pass { color: #0a0 } .fail { color: #c00 } .warn { color: #c80 }
-  .muted { color: #888 }
-  .canvases { display: flex; gap: 1em; margin-top: 1em; flex-wrap: wrap; }
-  .canvases > div { border: 1px solid #ccc; padding: .5em; }
-  canvas { display: block; max-width: 320px; height: auto; image-rendering: pixelated; }
-</style>
-</head><body>
-<h1>cellpose-js M2 demo</h1>
-<p class="muted">Full pre-process + per-tile inference. Pick an image (any size; CPSAM tiles at 256). Tile stitching is M5.</p>
-<div class="row">
-  Model URL: <input id="modelUrl" value="https://huggingface.co/Ballon999/cellpose-sam-onnx/resolve/main/cpsam_fp16.onnx" size="80">
-</div>
-<div class="row">
-  <label><input type="checkbox" id="preload" checked> preload session</label>
-  <label><input type="checkbox" id="bypassCache"> bypass cache</label>
-</div>
-<div class="row">
-  Image: <input type="file" id="imageFile" accept="image/*">
-  <button id="useSynthetic">or use synthetic (random)</button>
-</div>
-<div class="row">
-  Diameter (px): <input id="diameter" type="number" value="" size="6" placeholder="auto/skip">
-  Tile: <input id="tile" type="number" value="256" size="5">
-  chan: <input id="chan" type="number" value="0" min="0" max="3" size="2">
-  chan2: <input id="chan2" type="number" value="0" min="0" max="3" size="2">
-  <button id="go" disabled>Run</button>
-  <button id="abort" disabled>Abort</button>
-  <span id="progress" class="muted"></span>
-</div>
-<pre id="log">load a model URL and an image (or synthetic), then Run.</pre>
-<div class="canvases">
-  <div><div class="muted">input</div><canvas id="inputCanvas"></canvas></div>
-  <div><div class="muted">masks (full image)</div><canvas id="masksFullCanvas"></canvas></div>
-  <div><div class="muted">cellprob (tile 0, diagnostic)</div><canvas id="cellprobCanvas"></canvas></div>
-</div>
-<script type="module" src="./main.ts"></script>
-</body></html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>cellpose-js M2 demo</title>
+    <style>
+      body {
+        font:
+          14px/1.5 -apple-system,
+          sans-serif;
+        max-width: 900px;
+        margin: 2em auto;
+        padding: 0 1em;
+      }
+      pre {
+        background: #f4f4f4;
+        padding: 1em;
+        overflow: auto;
+        white-space: pre-wrap;
+        max-height: 360px;
+      }
+      button {
+        font-size: 16px;
+        padding: 0.5em 1em;
+      }
+      input {
+        font-size: 14px;
+        padding: 0.25em 0.5em;
+      }
+      .row {
+        display: flex;
+        gap: 0.5em;
+        align-items: center;
+        flex-wrap: wrap;
+        margin: 0.25em 0;
+      }
+      .pass {
+        color: #0a0;
+      }
+      .fail {
+        color: #c00;
+      }
+      .warn {
+        color: #c80;
+      }
+      .muted {
+        color: #888;
+      }
+      .canvases {
+        display: flex;
+        gap: 1em;
+        margin-top: 1em;
+        flex-wrap: wrap;
+      }
+      .canvases > div {
+        border: 1px solid #ccc;
+        padding: 0.5em;
+      }
+      canvas {
+        display: block;
+        max-width: 320px;
+        height: auto;
+        image-rendering: pixelated;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>cellpose-js M2 demo</h1>
+    <p class="muted">
+      Full pre-process + per-tile inference. Pick an image (any size; CPSAM tiles at 256). Tile
+      stitching is M5.
+    </p>
+    <div class="row">
+      Model URL:
+      <input
+        id="modelUrl"
+        value="https://huggingface.co/Ballon999/cellpose-sam-onnx/resolve/main/cpsam_fp16.onnx"
+        size="80"
+      />
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="preload" checked /> preload session</label>
+      <label><input type="checkbox" id="bypassCache" /> bypass cache</label>
+    </div>
+    <div class="row">
+      Image: <input type="file" id="imageFile" accept="image/*" />
+      <button id="useSynthetic">or use synthetic (random)</button>
+    </div>
+    <div class="row">
+      Diameter (px):
+      <input id="diameter" type="number" value="" size="6" placeholder="auto/skip" /> Tile:
+      <input id="tile" type="number" value="256" size="5" /> chan:
+      <input id="chan" type="number" value="0" min="0" max="3" size="2" /> chan2:
+      <input id="chan2" type="number" value="0" min="0" max="3" size="2" />
+      <button id="go" disabled>Run</button>
+      <button id="abort" disabled>Abort</button>
+      <span id="progress" class="muted"></span>
+    </div>
+    <pre id="log">load a model URL and an image (or synthetic), then Run.</pre>
+    <div class="canvases">
+      <div>
+        <div class="muted">input</div>
+        <canvas id="inputCanvas"></canvas>
+      </div>
+      <div>
+        <div class="muted">masks (full image)</div>
+        <canvas id="masksFullCanvas"></canvas>
+      </div>
+      <div>
+        <div class="muted">cellprob (tile 0, diagnostic)</div>
+        <canvas id="cellprobCanvas"></canvas>
+      </div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

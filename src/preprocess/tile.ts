@@ -62,7 +62,7 @@ export function makeTiles(
   width: number,
   height: number,
   channels: number,
-  opts: TileOptions = {}
+  opts: TileOptions = {},
 ): TileRecord[] {
   const bsize = opts.bsize ?? 256;
   let overlap = opts.overlap ?? 0.1;
@@ -77,10 +77,10 @@ export function makeTiles(
     return [packTile(chw, width, height, channels, 0, 0, bsize, true)];
   }
 
-  const ny = height <= bsize ? 1 : Math.ceil((1 + 2 * overlap) * height / bsize);
-  const nx = width  <= bsize ? 1 : Math.ceil((1 + 2 * overlap) * width  / bsize);
+  const ny = height <= bsize ? 1 : Math.ceil(((1 + 2 * overlap) * height) / bsize);
+  const nx = width <= bsize ? 1 : Math.ceil(((1 + 2 * overlap) * width) / bsize);
   const ystart = linspaceInt(Math.max(0, height - bsize), ny);
-  const xstart = linspaceInt(Math.max(0, width  - bsize), nx);
+  const xstart = linspaceInt(Math.max(0, width - bsize), nx);
 
   const tiles: TileRecord[] = [];
   for (const ty of ystart) {
@@ -94,14 +94,18 @@ export function makeTiles(
 /** Extract a (C, bsize, bsize) tile starting at (tx, ty), zero-padded if needed. */
 function packTile(
   chw: Float32Array,
-  width: number, height: number, channels: number,
-  tx: number, ty: number, bsize: number,
-  zeroPad: boolean
+  width: number,
+  height: number,
+  channels: number,
+  tx: number,
+  ty: number,
+  bsize: number,
+  zeroPad: boolean,
 ): TileRecord {
   const tile = new Float32Array(channels * bsize * bsize);
   const hwSrc = width * height;
   const hwTile = bsize * bsize;
-  const copyW = Math.min(bsize, width  - tx);
+  const copyW = Math.min(bsize, width - tx);
   const copyH = Math.min(bsize, height - ty);
   for (let c = 0; c < channels; c++) {
     const dstChanOff = c * hwTile;

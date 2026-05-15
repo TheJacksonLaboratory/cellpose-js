@@ -8,7 +8,7 @@
 
 export function instanceIoUs(
   gt: Uint16Array | Uint32Array,
-  pred: Uint16Array | Uint32Array
+  pred: Uint16Array | Uint32Array,
 ): { mean: number; per: number[] } {
   if (gt.length !== pred.length) {
     throw new Error(`label map length mismatch: ${gt.length} vs ${pred.length}`);

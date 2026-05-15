@@ -18,7 +18,10 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIX = path.join(__dirname, 'fixtures_dyn');
 
-interface Case { name: string; gate: number; }
+interface Case {
+  name: string;
+  gate: number;
+}
 
 describe('compute_masks parity', () => {
   const cases: Case[] = [
@@ -30,19 +33,21 @@ describe('compute_masks parity', () => {
     // numerical-noise territory. Gate set accordingly; the real M4 gate
     // (mean IoU ≥ 0.9 on real CPSAM outputs) lives in a follow-up fixture.
     { name: 'three_cells_192', gate: 0.55 },
-    { name: 'empty_96',        gate: 0.99 },
+    { name: 'empty_96', gate: 0.99 },
   ];
   for (const c of cases) {
     it(c.name, () => {
-      const dP   = readNpy(path.join(FIX, `${c.name}_dP.npy`));
-      const cp   = readNpy(path.join(FIX, `${c.name}_cellprob.npy`));
-      const exp  = readNpy(path.join(FIX, `${c.name}_mask.npy`));
+      const dP = readNpy(path.join(FIX, `${c.name}_dP.npy`));
+      const cp = readNpy(path.join(FIX, `${c.name}_cellprob.npy`));
+      const exp = readNpy(path.join(FIX, `${c.name}_mask.npy`));
       const [, H, W] = dP.shape as [number, number, number];
       const got = computeMasks(dP.data as Float32Array, cp.data as Float32Array, H, W);
       const expArr = exp.data as Uint16Array;
       const { mean, per } = instanceIoUs(expArr, got.masks);
-      // eslint-disable-next-line no-console
-      console.log(`[${c.name}] expected=${expArr.reduce((m, v) => Math.max(m, v as number), 0)} predicted=${got.count} mean IoU=${mean.toFixed(3)} per=[${per.map(v => v.toFixed(2)).join(', ')}]`);
+
+      console.log(
+        `[${c.name}] expected=${expArr.reduce((m, v) => Math.max(m, v as number), 0)} predicted=${got.count} mean IoU=${mean.toFixed(3)} per=[${per.map((v) => v.toFixed(2)).join(', ')}]`,
+      );
       expect(mean).toBeGreaterThanOrEqual(c.gate);
     });
   }

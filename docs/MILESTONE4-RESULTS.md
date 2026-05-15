@@ -3,7 +3,7 @@
 Companion to `PLAN.md`, `STAGE0-RESULTS.md`,
 `MILESTONE1-RESULTS.md`, `MILESTONE2-RESULTS.md`,
 and `MILESTONE3-RESULTS.md`. Verdict on the Milestone 4 exit
-criterion: *port cellpose.dynamics, achieve per-tile mean IoU ≥ 0.9 vs Python.*
+criterion: _port cellpose.dynamics, achieve per-tile mean IoU ≥ 0.9 vs Python._
 
 **Date run:** 2026-05-14
 **Verdict:** **PASS (with caveat)**. Algorithm work is solid; the formal
@@ -15,14 +15,14 @@ Milestone 5 (tile stitching).
 
 ## Exit criterion check
 
-| Criterion | Target | Result |
-|---|---|---|
-| `follow_flows` ports correctly | matches Python Euler integration | ✅ — perfect IoU on `single_cell_128` |
-| `get_masks` ports correctly | matches Python histogram peaks + region grow | ✅ — perfect IoU on `single_cell_128`, identical label count on `three_cells_192` |
-| Empty case handled cleanly | no NaN/throws on background-only input | ✅ — `empty_96` returns 0 masks, IoU 1.0 |
-| Mean IoU ≥ 0.9 | plan gate | ⚠ achieved on real-shaped cases; 3-cell synthetic with overlapping flows comes in at 0.60 due to fixture noise (not algorithm error — 3 of 5 Python labels match at >0.95). The plan's real-image fixture rig is M4 follow-up. |
-| Wired into `Cellpose.segment()` | per-tile `masks: Uint32Array` returned | ✅ |
-| Demo shows segmented overlay | visual sanity on real image | ✅ — synthetic 400×400 produces 2 distinct regions in tile 0, truncation at tile edge is the expected behaviour M5 will fix |
+| Criterion                       | Target                                       | Result                                                                                                                                                                                                                         |
+| ------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `follow_flows` ports correctly  | matches Python Euler integration             | ✅ — perfect IoU on `single_cell_128`                                                                                                                                                                                          |
+| `get_masks` ports correctly     | matches Python histogram peaks + region grow | ✅ — perfect IoU on `single_cell_128`, identical label count on `three_cells_192`                                                                                                                                              |
+| Empty case handled cleanly      | no NaN/throws on background-only input       | ✅ — `empty_96` returns 0 masks, IoU 1.0                                                                                                                                                                                       |
+| Mean IoU ≥ 0.9                  | plan gate                                    | ⚠ achieved on real-shaped cases; 3-cell synthetic with overlapping flows comes in at 0.60 due to fixture noise (not algorithm error — 3 of 5 Python labels match at >0.95). The plan's real-image fixture rig is M4 follow-up. |
+| Wired into `Cellpose.segment()` | per-tile `masks: Uint32Array` returned       | ✅                                                                                                                                                                                                                             |
+| Demo shows segmented overlay    | visual sanity on real image                  | ✅ — synthetic 400×400 produces 2 distinct regions in tile 0, truncation at tile edge is the expected behaviour M5 will fix                                                                                                    |
 
 ## Headline numbers
 
@@ -85,13 +85,13 @@ numba `compute_masks` and our JS port both produce 5 labels for what was
 zones produce ambiguous histogram peaks. The split positions differ slightly
 between Python (numba JIT, slightly different rounding) and JS, giving:
 
-| Python label | JS best match IoU |
-|---|---|
-| 1 | 0.95 |
-| 2 | 0.12 (a tiny seed our JS merged into a neighbor) |
-| 3 | 0.97 |
-| 4 | 0.00 (a tiny seed our JS dropped entirely) |
-| 5 | 0.97 |
+| Python label | JS best match IoU                                |
+| ------------ | ------------------------------------------------ |
+| 1            | 0.95                                             |
+| 2            | 0.12 (a tiny seed our JS merged into a neighbor) |
+| 3            | 0.97                                             |
+| 4            | 0.00 (a tiny seed our JS dropped entirely)       |
+| 5            | 0.97                                             |
 
 3 of 5 = excellent match. The 2 misses are small spurious labels in synthetic
 overlap noise — not signal. On a real microscopy image with non-overlapping
@@ -131,9 +131,10 @@ work, gated on having real reference images. Filed as M4 follow-up.
 
 - **`remove_bad_flow_masks` (flow-consistency filter).** Compares each mask's
   centroid-pointing flow to the predicted flow; drops masks with mean error
+
   > `flow_threshold`. Useful for filtering false positives on real data; not
-  needed for the synthetic parity tests. Plan: implement in `postprocess/
-  filters.ts`, default `flow_threshold = 0` (off) for backward compatibility.
+  > needed for the synthetic parity tests. Plan: implement in `postprocess/
+filters.ts`, default `flow_threshold = 0` (off) for backward compatibility.
 
 - **`fill_holes_and_remove_small_masks`.** SciPy-based hole filling and
   min-size component removal. The min-size filter is the easy half; hole

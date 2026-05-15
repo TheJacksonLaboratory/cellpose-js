@@ -35,9 +35,9 @@ function maxAbsDiff(a: Float32Array, b: Float32Array): number {
 describe('averageTiles round-trip', () => {
   const cases: Array<[string, number, number]> = [
     ['256x256_singletile', 256, 256],
-    ['400x400_2x2_grid',   400, 400],
-    ['609x457_3x3_grid',   609, 457],
-    ['1024x512_wide',      1024, 512],
+    ['400x400_2x2_grid', 400, 400],
+    ['609x457_3x3_grid', 609, 457],
+    ['1024x512_wide', 1024, 512],
   ];
   for (const [name, H, W] of cases) {
     it(name, () => {
@@ -45,7 +45,9 @@ describe('averageTiles round-trip', () => {
       const tiles = makeTiles(img, W, H, 3, { bsize: 256, overlap: 0.1 });
       const tileInputs: TileInputForAveraging[] = tiles.map((t) => ({
         flowsCellprob: t.tile,
-        tx: t.tx, ty: t.ty, bsize: t.bsize,
+        tx: t.tx,
+        ty: t.ty,
+        bsize: t.bsize,
       }));
       const avg = averageTiles(tileInputs, H, W);
       // For images < bsize on an axis, makeTiles pads with zeros. averageTiles

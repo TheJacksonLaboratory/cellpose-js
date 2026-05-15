@@ -52,10 +52,7 @@ async function tryCacheWrite(key: string, buf: ArrayBuffer): Promise<void> {
   }
 }
 
-export async function fetchModel(
-  url: string,
-  opts: FetchModelOptions = {}
-): Promise<ArrayBuffer> {
+export async function fetchModel(url: string, opts: FetchModelOptions = {}): Promise<ArrayBuffer> {
   const { onProgress, bypassCache, signal } = opts;
 
   const etag = await probeEtag(url, signal);

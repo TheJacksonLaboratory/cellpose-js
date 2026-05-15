@@ -14,12 +14,14 @@ Goal: confirm `cellpose.vit_sam.Transformer` exports to ONNX cleanly and matches
 PyTorch within FP32 noise (gate: max abs error < 1e-3).
 
 **Setup**
+
 - Python 3.11.9 venv
 - torch 2.12.0, cellpose 4.1.1, onnx 1.21.0, onnxruntime 1.26.0
 - CPSAM weights: `mouseland/cellpose-sam` (1.23 GB), 304.6M params
 - Tile: `(1, 3, 256, 256)` FP32, 10 deterministic random tiles (seed 0)
 
 **Export notes**
+
 - torch 2.12 uses the dynamo-based exporter by default. `dynamo=True` succeeded
   on the second attempt (`strict=False` failed, `strict=True` succeeded).
 - Required extra dep: `onnxscript`.
@@ -33,19 +35,19 @@ PyTorch within FP32 noise (gate: max abs error < 1e-3).
 **Parity results**
 
 | tile | max abs err | pt (ms) | ort (ms) |
-|-----:|-------------|---------|----------|
-|  0   | 1.24e-05    | 1063    | 2122     |
-|  1   | 8.58e-06    | 1087    | 2011     |
-|  2   | 8.58e-06    | 1031    | 2424     |
-|  3   | 7.63e-06    | 1698    | 2632     |
-|  4   | 8.58e-06    | 2039    | 2078     |
-|  5   | 7.63e-06    |  991    | 1989     |
-|  6   | 1.00e-05    |  975    | 1935     |
-|  7   | 9.06e-06    |  987    | 2139     |
-|  8   | 8.11e-06    |  966    | 1928     |
-|  9   | 9.06e-06    |  948    | 1922     |
+| ---: | ----------- | ------- | -------- |
+|    0 | 1.24e-05    | 1063    | 2122     |
+|    1 | 8.58e-06    | 1087    | 2011     |
+|    2 | 8.58e-06    | 1031    | 2424     |
+|    3 | 7.63e-06    | 1698    | 2632     |
+|    4 | 8.58e-06    | 2039    | 2078     |
+|    5 | 7.63e-06    | 991     | 1989     |
+|    6 | 1.00e-05    | 975     | 1935     |
+|    7 | 9.06e-06    | 987     | 2139     |
+|    8 | 8.11e-06    | 966     | 1928     |
+|    9 | 9.06e-06    | 948     | 1922     |
 
-- **Worst max abs err:** 1.24e-05  (gate: 1e-3 — passes by ~80×)
+- **Worst max abs err:** 1.24e-05 (gate: 1e-3 — passes by ~80×)
 - **Mean max abs err:** 8.96e-06
 - PyTorch CPU baseline: ~1.18 s/tile
 - ONNX Runtime CPU EP: ~2.12 s/tile (slower than PyTorch on CPU — irrelevant; CPU
@@ -73,6 +75,7 @@ Goal: confirm the FP16 ONNX runs on `onnxruntime-web`'s WebGPU EP at acceptable
 per-tile latency (gate: median < 2 s/tile; hard fail >= 5 s/tile).
 
 **Setup**
+
 - Hardware: Apple M1 Max, macOS, Chrome (Metal-3 WebGPU adapter)
 - `onnxruntime-web@1.20.1` UMD build (`ort.webgpu.min.js`), WASM fallback assets
   from jsDelivr
@@ -99,6 +102,7 @@ GATE: PASS (median 628 ms < 2 s target)
 ```
 
 **Headline numbers**
+
 - **Steady-state: ~628 ms/tile** — 3.2× under the 2 s target.
 - **Cold start:** ~2.3 s (one-time shader/JIT compile on first run).
 - **Session create:** 1.31 s.
@@ -106,6 +110,7 @@ GATE: PASS (median 628 ms < 2 s target)
   throttling over a short run.
 
 **Friction encountered (resolved)**
+
 1. `jsdelivr` `+esm` wrapper 404'd on `onnxruntime-web` — switched to the UMD
    build `dist/ort.webgpu.min.js`.
 2. `onnxconverter-common` and ORT's `transformers.float16` both produced broken
@@ -136,7 +141,7 @@ GATE: PASS (median 628 ms < 2 s target)
   v1).
 - **Browser version floor:** Chrome 135+ / Safari 17.4+ for native
   `Float16Array`. If we need to support older browsers, switch to FP32 IO with
-  `keep_io_types=True` *but* that needs a working FP16 conversion path — defer.
+  `keep_io_types=True` _but_ that needs a working FP16 conversion path — defer.
 
 ## Scratch workspace
 

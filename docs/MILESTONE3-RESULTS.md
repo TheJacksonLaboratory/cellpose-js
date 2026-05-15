@@ -2,9 +2,9 @@
 
 Companion to `PLAN.md`, `STAGE0-RESULTS.md`,
 `MILESTONE1-RESULTS.md`, and `MILESTONE2-RESULTS.md`.
-Verdict on the Milestone 3 exit criterion: *per-tile inference offloaded to a
+Verdict on the Milestone 3 exit criterion: _per-tile inference offloaded to a
 Web Worker, AbortSignal cancellation within 100 ms, tile-level progress, no
-throughput regression.*
+throughput regression._
 
 **Date run:** 2026-05-14
 **Verdict:** **PASS**. Phase 1 work continues to Milestone 4 (flow dynamics).
@@ -14,12 +14,12 @@ throughput regression.*
 
 ## Exit criterion check
 
-| Criterion | Target | Result |
-|---|---|---|
-| Throughput preserved vs Spike B / M1 | meets Spike B 628 ms gate; no regression from M1's 277 ms | **281 ms median** measured across multiple runs (278, 281, 284, 309). No regression. |
-| UI responsiveness during inference | no UI thread jank (scrolling, input editing during Run should feel smooth) | **Smooth** — confirmed in browser by dragging text inputs and scrolling during multi-tile runs |
-| AbortSignal terminates worker mid-run | < 100 ms from `.abort()` call to caller seeing `AbortError` | ~50 ms (next tile boundary); next `Run` afterward works ✅ |
-| Tile-level progress callback | `onTileProgress(done, total)` fires per tile | wired through `segment()`; demo displays `tile N/total` |
+| Criterion                             | Target                                                                     | Result                                                                                         |
+| ------------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Throughput preserved vs Spike B / M1  | meets Spike B 628 ms gate; no regression from M1's 277 ms                  | **281 ms median** measured across multiple runs (278, 281, 284, 309). No regression.           |
+| UI responsiveness during inference    | no UI thread jank (scrolling, input editing during Run should feel smooth) | **Smooth** — confirmed in browser by dragging text inputs and scrolling during multi-tile runs |
+| AbortSignal terminates worker mid-run | < 100 ms from `.abort()` call to caller seeing `AbortError`                | ~50 ms (next tile boundary); next `Run` afterward works ✅                                     |
+| Tile-level progress callback          | `onTileProgress(done, total)` fires per tile                               | wired through `segment()`; demo displays `tile N/total`                                        |
 
 ## Headline numbers
 

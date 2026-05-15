@@ -27,8 +27,9 @@ export interface ComputeMasksOptions {
 export function computeMasks(
   dP: Float32Array,
   cellprob: Float32Array,
-  H: number, W: number,
-  opts: ComputeMasksOptions = {}
+  H: number,
+  W: number,
+  opts: ComputeMasksOptions = {},
 ): GetMasksResult {
   const { cellprobThreshold = 0, niter = 200, maxSizeFraction = 0.4 } = opts;
   const hw = H * W;
@@ -37,11 +38,10 @@ export function computeMasks(
   const dPScaled = new Float32Array(2 * hw);
   for (let i = 0; i < hw; i++) {
     const on = (cellprob[i] as number) > cellprobThreshold ? 1 : 0;
-    dPScaled[i]      = (dP[i]      as number) * on / 5;
-    dPScaled[hw + i] = (dP[hw + i] as number) * on / 5;
+    dPScaled[i] = ((dP[i] as number) * on) / 5;
+    dPScaled[hw + i] = ((dP[hw + i] as number) * on) / 5;
   }
 
-  const { pFinal, seedY, seedX } =
-    followFlows(dPScaled, cellprob, H, W, cellprobThreshold, niter);
+  const { pFinal, seedY, seedX } = followFlows(dPScaled, cellprob, H, W, cellprobThreshold, niter);
   return getMasks(pFinal, seedY, seedX, H, W, maxSizeFraction);
 }

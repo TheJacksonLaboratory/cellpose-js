@@ -66,22 +66,20 @@ export interface AveragedTensor {
   W: number;
 }
 
-export function averageTiles(
-  tiles: TileInputForAveraging[],
-  H: number, W: number
-): AveragedTensor {
+export function averageTiles(tiles: TileInputForAveraging[], H: number, W: number): AveragedTensor {
   if (tiles.length === 0) {
     return { data: new Float32Array(3 * H * W), H, W };
   }
   const fullHW = H * W;
-  const yf  = new Float32Array(3 * fullHW);
+  const yf = new Float32Array(3 * fullHW);
   const nav = new Float32Array(fullHW);
 
   for (const t of tiles) {
     const B = t.bsize;
     const mask = taperMask(B);
     const tileHW = B * B;
-    const y0 = t.ty, x0 = t.tx;
+    const y0 = t.ty,
+      x0 = t.tx;
     const yMax = Math.min(H, y0 + B);
     const xMax = Math.min(W, x0 + B);
     for (let dy = 0; dy < yMax - y0; dy++) {
@@ -90,9 +88,9 @@ export function averageTiles(
       for (let dx = 0; dx < xMax - x0; dx++) {
         const w = mask[tileRowOff + dx] as number;
         const fullIdx = fullRow + (x0 + dx);
-        yf[fullIdx]              += (t.flowsCellprob[tileRowOff + dx] as number)               * w;
-        yf[fullHW + fullIdx]     += (t.flowsCellprob[tileHW + tileRowOff + dx] as number)      * w;
-        yf[2 * fullHW + fullIdx] += (t.flowsCellprob[2 * tileHW + tileRowOff + dx] as number)  * w;
+        yf[fullIdx] += (t.flowsCellprob[tileRowOff + dx] as number) * w;
+        yf[fullHW + fullIdx] += (t.flowsCellprob[tileHW + tileRowOff + dx] as number) * w;
+        yf[2 * fullHW + fullIdx] += (t.flowsCellprob[2 * tileHW + tileRowOff + dx] as number) * w;
         nav[fullIdx] += w;
       }
     }
@@ -102,8 +100,8 @@ export function averageTiles(
     const n = nav[i] as number;
     if (n > 0) {
       const inv = 1 / n;
-      yf[i]              *= inv;
-      yf[fullHW + i]     *= inv;
+      yf[i] *= inv;
+      yf[fullHW + i] *= inv;
       yf[2 * fullHW + i] *= inv;
     }
   }

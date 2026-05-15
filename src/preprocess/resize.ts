@@ -34,7 +34,10 @@ export interface DiameterResizeOptions {
 }
 
 /** Create a 2D canvas context. Prefers OffscreenCanvas for worker contexts. */
-function createCanvas(w: number, h: number): {
+function createCanvas(
+  w: number,
+  h: number,
+): {
   ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
 } {
   if (typeof OffscreenCanvas !== 'undefined') {
@@ -45,7 +48,8 @@ function createCanvas(w: number, h: number): {
   }
   if (typeof document !== 'undefined') {
     const c = document.createElement('canvas');
-    c.width = w; c.height = h;
+    c.width = w;
+    c.height = h;
     const ctx = c.getContext('2d');
     if (!ctx) throw new Error('HTMLCanvas 2d context unavailable');
     return { ctx };
@@ -67,23 +71,26 @@ function createCanvas(w: number, h: number): {
  */
 function resizeChannel(
   src: Float32Array,
-  srcW: number, srcH: number,
-  dstW: number, dstH: number
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number,
 ): Float32Array {
   // Find the channel's value range so quantization uses the full uint8.
-  let mn = Infinity, mx = -Infinity;
+  let mn = Infinity,
+    mx = -Infinity;
   for (let i = 0; i < src.length; i++) {
     const v = src[i] as number;
     if (v < mn) mn = v;
     if (v > mx) mx = v;
   }
-  const span = (mx - mn) || 1;
+  const span = mx - mn || 1;
 
   // Build the source ImageData.
   const srcRgba = new Uint8ClampedArray(srcW * srcH * 4);
   for (let i = 0; i < src.length; i++) {
-    const u8 = Math.max(0, Math.min(255, Math.round(((src[i] as number) - mn) / span * 255)));
-    srcRgba[i * 4]     = u8;
+    const u8 = Math.max(0, Math.min(255, Math.round((((src[i] as number) - mn) / span) * 255)));
+    srcRgba[i * 4] = u8;
     srcRgba[i * 4 + 1] = u8;
     srcRgba[i * 4 + 2] = u8;
     srcRgba[i * 4 + 3] = 255;
@@ -103,7 +110,7 @@ function resizeChannel(
   const dstRgba = dstCtx.getImageData(0, 0, dstW, dstH).data;
   const out = new Float32Array(dstW * dstH);
   for (let i = 0; i < out.length; i++) {
-    out[i] = (dstRgba[i * 4] as number) / 255 * span + mn;
+    out[i] = ((dstRgba[i * 4] as number) / 255) * span + mn;
   }
   return out;
 }
@@ -121,7 +128,7 @@ export function diameterResize(
   chw: Float32Array,
   width: number,
   height: number,
-  opts: DiameterResizeOptions
+  opts: DiameterResizeOptions,
 ): ResizeResult {
   const { channels, diameter, targetDiameter = 30 } = opts;
   if (!(diameter > 0)) {
@@ -140,8 +147,8 @@ export function diameterResize(
   if (dstW * dstH > MAX_PIXELS) {
     throw new Error(
       `diameterResize: requested output ${dstW}x${dstH} (scale ${scale.toFixed(2)}) ` +
-      `exceeds the safe limit (4096x4096). Source is ${width}x${height}; estimated ` +
-      `diameter is ${opts.diameter}. Increase diameter to downscale less aggressively.`
+        `exceeds the safe limit (4096x4096). Source is ${width}x${height}; estimated ` +
+        `diameter is ${opts.diameter}. Increase diameter to downscale less aggressively.`,
     );
   }
   const hwOut = dstW * dstH;

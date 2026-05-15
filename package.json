@@ -34,7 +34,11 @@
     "dev": "vite",
     "demo": "vite serve examples/demo",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests",
+    "lint:fix": "eslint --fix src tests",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"examples/**/*.{ts,html}\" \"*.{ts,json,md}\" \"docs/**/*.md\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"examples/**/*.{ts,html}\" \"*.{ts,json,md}\" \"docs/**/*.md\""
   },
   "peerDependencies": {
     "onnxruntime-web": "~1.26.0"
@@ -43,10 +47,14 @@
     "idb-keyval": "^6.2.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/node": "^22.0.0",
     "@webgpu/types": "^0.1.70",
+    "eslint": "^9.39.4",
     "onnxruntime-web": "~1.26.0",
+    "prettier": "^3.8.3",
     "typescript": "^5.6.0",
+    "typescript-eslint": "^8.59.3",
     "vite": "^5.4.0",
     "vitest": "^2.1.0"
   },

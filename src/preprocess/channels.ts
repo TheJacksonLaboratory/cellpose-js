@@ -40,12 +40,14 @@ export function buildCpsamChannels(
   width: number,
   height: number,
   channels: number,
-  opts: ChannelMapOptions = {}
+  opts: ChannelMapOptions = {},
 ): Float32Array {
   const { chan = 0, chan2 = 0 } = opts;
   const hw = width * height;
   if (src.length !== hw * channels) {
-    throw new Error(`buildCpsamChannels: expected ${hw * channels} values for ${channels}ch image, got ${src.length}`);
+    throw new Error(
+      `buildCpsamChannels: expected ${hw * channels} values for ${channels}ch image, got ${src.length}`,
+    );
   }
   const out = new Float32Array(3 * hw);
 

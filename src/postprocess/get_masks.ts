@@ -28,17 +28,18 @@ export interface GetMasksResult {
 }
 
 const RPAD = 20;
-const PEAK_HIST_THRESHOLD = 10;  // h(p) > 10 to be a seed
-const GROW_HIST_THRESHOLD = 2;   // grow into pixels where h > 2
+const PEAK_HIST_THRESHOLD = 10; // h(p) > 10 to be a seed
+const GROW_HIST_THRESHOLD = 2; // grow into pixels where h > 2
 const GROW_ITERS = 5;
-const HALF_WIN = 5;              // 11x11 window = ±5
+const HALF_WIN = 5; // 11x11 window = ±5
 
 export function getMasks(
   pFinal: Int32Array,
   seedY: Int32Array,
   seedX: Int32Array,
-  H: number, W: number,
-  maxSizeFraction = 0.4
+  H: number,
+  W: number,
+  maxSizeFraction = 0.4,
 ): GetMasksResult {
   const n = seedY.length;
   const total = H * W;
@@ -54,11 +55,14 @@ export function getMasks(
   const px = new Int32Array(n);
   for (let i = 0; i < n; i++) {
     // Clamp + pad (matches Python: pt += rpad; clamp min=0; clamp max=shape+rpad-1)
-    let y = (pFinal[2 * i]     as number) + RPAD;
+    let y = (pFinal[2 * i] as number) + RPAD;
     let x = (pFinal[2 * i + 1] as number) + RPAD;
-    if (y < 0) y = 0; else if (y > H + RPAD - 1) y = H + RPAD - 1;
-    if (x < 0) x = 0; else if (x > W + RPAD - 1) x = W + RPAD - 1;
-    py[i] = y; px[i] = x;
+    if (y < 0) y = 0;
+    else if (y > H + RPAD - 1) y = H + RPAD - 1;
+    if (x < 0) x = 0;
+    else if (x > W + RPAD - 1) x = W + RPAD - 1;
+    py[i] = y;
+    px[i] = x;
     hist[y * Wp + x]++;
   }
 
@@ -75,7 +79,10 @@ export function getMasks(
       for (let dy = -2; dy <= 2 && isMax; dy++) {
         const yOff = (y + dy) * Wp;
         for (let dx = -2; dx <= 2; dx++) {
-          if (((hist[yOff + (x + dx)] as number) > h)) { isMax = false; break; }
+          if ((hist[yOff + (x + dx)] as number) > h) {
+            isMax = false;
+            break;
+          }
         }
       }
       if (isMax) seedList.push({ y, x, count: h });
@@ -89,7 +96,7 @@ export function getMasks(
   // 5. Region-grow each seed in histogram space.
   // 6. Paint into a histogram-shape label map. Use a flat Uint32Array of size Hp*Wp.
   const M1 = new Uint32Array(Hp * Wp);
-  const WIN = 2 * HALF_WIN + 1;  // 11
+  const WIN = 2 * HALF_WIN + 1; // 11
   const seedMask = new Uint8Array(WIN * WIN);
   const next = new Uint8Array(WIN * WIN);
 
@@ -126,8 +133,11 @@ export function getMasks(
         }
         for (let xx = 0; xx < WIN; xx++) {
           const histX = s.x - HALF_WIN + xx;
-          if (histX < 0 || histX >= Wp) { next[yy * WIN + xx] = 0; continue; }
-          if (((hist[histY * Wp + histX] as number) <= GROW_HIST_THRESHOLD)) next[yy * WIN + xx] = 0;
+          if (histX < 0 || histX >= Wp) {
+            next[yy * WIN + xx] = 0;
+            continue;
+          }
+          if ((hist[histY * Wp + histX] as number) <= GROW_HIST_THRESHOLD) next[yy * WIN + xx] = 0;
         }
       }
       seedMask.set(next);
@@ -179,7 +189,10 @@ export function getMasks(
     const v = masks[i] as number;
     if (v === 0) continue;
     let m = remap.get(v);
-    if (m === undefined) { m = nextLabel++; remap.set(v, m); }
+    if (m === undefined) {
+      m = nextLabel++;
+      remap.set(v, m);
+    }
     masks[i] = m;
   }
   return { masks, count: nextLabel - 1 };

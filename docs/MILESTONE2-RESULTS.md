@@ -2,8 +2,8 @@
 
 Companion to `PLAN.md`, `STAGE0-RESULTS.md`, and
 `MILESTONE1-RESULTS.md`. Verdict on the Milestone 2 exit criterion:
-*bit-exact match vs Python on a fixture set, plus end-to-end real-image
-execution through the new segment() entry point.*
+_bit-exact match vs Python on a fixture set, plus end-to-end real-image
+execution through the new segment() entry point._
 
 **Date run:** 2026-05-14
 **Verdict:** **PASS**. Phase 1 work continues to Milestone 3 (worker offload + abort).
@@ -13,14 +13,14 @@ execution through the new segment() entry point.*
 
 ## Exit criterion check
 
-| Criterion | Status | Evidence |
-|---|---|---|
-| Bit-exact normalize parity vs Python | ✅ | max abs err < 1e-5 across 3 fixtures (1ch/3ch, 64×64 and 256×256) |
-| Bit-exact tile pixel parity vs Python | ✅ | max abs err = 0 on the valid region across 4 fixtures |
-| Tile origin parity vs Python | ✅ | exact match — `ny=ceil((1+2·overlap)·Ly/B)`, `linspace(0, Ly−B, ny).astype(int)` ported faithfully |
-| Real-image execution through `segment()` | ✅ | 609×457 RGB → 9 tiles, no errors |
-| Preprocessing overhead negligible | ✅ | per-tile inference 277 ms (vs Spike B 277 ms — identical) |
-| `chan` / `chan2` legacy semantics preserved | ✅ | output (3,H,W) ordered [chan, chan2-or-zero, zero] matches Cellpose UX |
+| Criterion                                   | Status | Evidence                                                                                           |
+| ------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------- |
+| Bit-exact normalize parity vs Python        | ✅     | max abs err < 1e-5 across 3 fixtures (1ch/3ch, 64×64 and 256×256)                                  |
+| Bit-exact tile pixel parity vs Python       | ✅     | max abs err = 0 on the valid region across 4 fixtures                                              |
+| Tile origin parity vs Python                | ✅     | exact match — `ny=ceil((1+2·overlap)·Ly/B)`, `linspace(0, Ly−B, ny).astype(int)` ported faithfully |
+| Real-image execution through `segment()`    | ✅     | 609×457 RGB → 9 tiles, no errors                                                                   |
+| Preprocessing overhead negligible           | ✅     | per-tile inference 277 ms (vs Spike B 277 ms — identical)                                          |
+| `chan` / `chan2` legacy semantics preserved | ✅     | output (3,H,W) ordered [chan, chan2-or-zero, zero] matches Cellpose UX                             |
 
 ## Headline numbers
 
@@ -55,7 +55,7 @@ make_tiles parity:  tile_smaller         exact (valid region)
   → `normalizePerChannel` → `makeTiles`. Each module is independently testable
   and the pipeline orders ops to match Cellpose's own conventions.
 - **Per-tile output shape**: `{ tile, tx, ty, bsize, flows_cellprob, inferenceMs }`.
-  Tile origins are in *resized* image coordinates so M5's stitching can place
+  Tile origins are in _resized_ image coordinates so M5's stitching can place
   each tile back onto the post-resize canvas before the inverse-resize step
   at the very end.
 - **Vitest harness with .npy parity tests** — small custom NPY reader
@@ -74,35 +74,35 @@ CPSAM was trained with channel-shuffling augmentation, so it does **not**
 privilege a specific channel as cyto vs nuclei. The `chan`/`chan2` API exists
 to mirror Cellpose 1–3's user-facing conventions, not because CPSAM needs it.
 
-| Value | Source channel selected |
-|---|---|
-| `chan = 0` | First source channel — treats input as grayscale (R for RGB) |
-| `chan = 1` | R |
-| `chan = 2` | G |
-| `chan = 3` | B |
-| `chan2 = 0` | No second channel (output channel 1 is zero) |
-| `chan2 = 1..3` | Same indexing as `chan` |
+| Value          | Source channel selected                                      |
+| -------------- | ------------------------------------------------------------ |
+| `chan = 0`     | First source channel — treats input as grayscale (R for RGB) |
+| `chan = 1`     | R                                                            |
+| `chan = 2`     | G                                                            |
+| `chan = 3`     | B                                                            |
+| `chan2 = 0`    | No second channel (output channel 1 is zero)                 |
+| `chan2 = 1..3` | Same indexing as `chan`                                      |
 
 Recommendations by image type:
 
-| Image type | `chan` | `chan2` |
-|---|---|---|
-| H&E histology, brightfield, phase contrast | `0` | `0` |
-| Fluorescence — green cyto, blue nuclei | `2` | `3` |
-| Fluorescence — red cyto, green nuclei | `1` | `2` |
-| Unknown / first run | `0` | `0` |
+| Image type                                 | `chan` | `chan2` |
+| ------------------------------------------ | ------ | ------- |
+| H&E histology, brightfield, phase contrast | `0`    | `0`     |
+| Fluorescence — green cyto, blue nuclei     | `2`    | `3`     |
+| Fluorescence — red cyto, green nuclei      | `1`    | `2`     |
+| Unknown / first run                        | `0`    | `0`     |
 
 ### `diameter` (input to `diameterResize`)
 
 Rescales the image so the median cell occupies ~30 px (CPSAM's training
 median across all corpora). Omit to run at native resolution.
 
-| Cell size in source image | Suggested `diameter` |
-|---|---|
-| Roughly 20–60 px across | leave blank — already in sweet spot |
-| Tiny (5–15 px) — bacteria, yeast | ≈ 10 (upscales image ~3×) |
-| Large (80+ px) — tissue at high zoom | your visual estimate (downscales) |
-| Unknown / first run | leave blank, run, eyeball one cell, retry |
+| Cell size in source image            | Suggested `diameter`                      |
+| ------------------------------------ | ----------------------------------------- |
+| Roughly 20–60 px across              | leave blank — already in sweet spot       |
+| Tiny (5–15 px) — bacteria, yeast     | ≈ 10 (upscales image ~3×)                 |
+| Large (80+ px) — tissue at high zoom | your visual estimate (downscales)         |
+| Unknown / first run                  | leave blank, run, eyeball one cell, retry |
 
 Rule of thumb for first-time test: **`chan=0`, `chan2=0`, no diameter**. If
 `cellprob` lights up on cells, you're set; otherwise estimate cell width in

@@ -6,10 +6,13 @@ import { assertSupportedEnvironment, describeAdapter } from './env.js';
 import { fetchModel, type FetchProgress } from './model-cache.js';
 import { configureOrt, _getWasmPaths } from './session.js';
 import {
-  buildCpsamChannels, type ChannelMapOptions,
+  buildCpsamChannels,
+  type ChannelMapOptions,
   diameterResize,
-  normalizePerChannel, type NormalizeOptions,
-  makeTiles, type TileRecord,
+  normalizePerChannel,
+  type NormalizeOptions,
+  makeTiles,
+  type TileRecord,
 } from './preprocess/index.js';
 import { computeMasks, type ComputeMasksOptions, averageTiles } from './postprocess/index.js';
 import type { MainToWorker, WorkerToMain } from './worker-protocol.js';
@@ -106,12 +109,15 @@ export class Cellpose {
     this._modelBytes = modelBytes;
   }
 
-  static async fromPretrained(modelUrl: string, opts: FromPretrainedOptions = {}): Promise<Cellpose> {
+  static async fromPretrained(
+    modelUrl: string,
+    opts: FromPretrainedOptions = {},
+  ): Promise<Cellpose> {
     assertSupportedEnvironment();
     const fetchOpts = {
-      ...(opts.onProgress  !== undefined && { onProgress: opts.onProgress }),
+      ...(opts.onProgress !== undefined && { onProgress: opts.onProgress }),
       ...(opts.bypassCache !== undefined && { bypassCache: opts.bypassCache }),
-      ...(opts.signal      !== undefined && { signal: opts.signal }),
+      ...(opts.signal !== undefined && { signal: opts.signal }),
     };
     const bytes = await fetchModel(modelUrl, fetchOpts);
     if (opts.wasmPaths) configureOrt({ wasmPaths: opts.wasmPaths });
@@ -120,7 +126,11 @@ export class Cellpose {
     return cp;
   }
 
-  async describeAdapter(): Promise<{ vendor: string; architecture: string; device: string } | null> {
+  async describeAdapter(): Promise<{
+    vendor: string;
+    architecture: string;
+    device: string;
+  } | null> {
     if (this._adapterInfo) return this._adapterInfo;
     return describeAdapter();
   }
@@ -129,21 +139,26 @@ export class Cellpose {
   private _ensureWorker(): Promise<void> {
     if (this._workerReady) return this._workerReady;
 
-    const worker = new Worker(
-      new URL('./inference.worker.js', import.meta.url),
-      { type: 'module' }
-    );
+    const worker = new Worker(new URL('./inference.worker.js', import.meta.url), {
+      type: 'module',
+    });
     this._worker = worker;
 
     worker.addEventListener('message', (ev: MessageEvent<WorkerToMain>) => {
       const msg = ev.data;
       if (msg.type === 'tile-result') {
         const p = this._pending.get(msg.tileId);
-        if (p) { this._pending.delete(msg.tileId); p.resolve(msg); }
+        if (p) {
+          this._pending.delete(msg.tileId);
+          p.resolve(msg);
+        }
       } else if (msg.type === 'error') {
         if (msg.tileId !== null) {
           const p = this._pending.get(msg.tileId);
-          if (p) { this._pending.delete(msg.tileId); p.reject(new Error(msg.message)); }
+          if (p) {
+            this._pending.delete(msg.tileId);
+            p.reject(new Error(msg.message));
+          }
         }
       }
     });
@@ -174,11 +189,17 @@ export class Cellpose {
         this._modelBytes = bytes;
         return bytes;
       };
-      ensureBytes().then((bytes) => {
-        this._modelBytes = null; // drop our ref since we're about to transfer ownership
-        const init: MainToWorker = { type: 'init', modelBytes: bytes, wasmPaths: _getWasmPaths() };
-        worker.postMessage(init, [bytes]);
-      }).catch(reject);
+      ensureBytes()
+        .then((bytes) => {
+          this._modelBytes = null; // drop our ref since we're about to transfer ownership
+          const init: MainToWorker = {
+            type: 'init',
+            modelBytes: bytes,
+            wasmPaths: _getWasmPaths(),
+          };
+          worker.postMessage(init, [bytes]);
+        })
+        .catch(reject);
     });
     return this._workerReady;
   }
@@ -194,7 +215,10 @@ export class Cellpose {
     this._pending.clear();
   }
 
-  private async _runTile(tile: Float32Array, bsize: number): Promise<Extract<WorkerToMain, { type: 'tile-result' }>> {
+  private async _runTile(
+    tile: Float32Array,
+    bsize: number,
+  ): Promise<Extract<WorkerToMain, { type: 'tile-result' }>> {
     await this._ensureWorker();
     const worker = this._worker;
     if (!worker) throw new Error('worker not available');
@@ -215,16 +239,22 @@ export class Cellpose {
     let abortListener: (() => void) | null = null;
     if (signal) {
       if (signal.aborted) throw new DOMException('Aborted before start', 'AbortError');
-      abortListener = () => this._abort(signal.reason instanceof Error ? signal.reason.message : undefined);
+      abortListener = () =>
+        this._abort(signal.reason instanceof Error ? signal.reason.message : undefined);
       signal.addEventListener('abort', abortListener);
     }
 
     try {
       let chw = buildCpsamChannels(input.data, input.width, input.height, input.channels, opts);
-      let w = input.width, h = input.height, scale = 1;
+      let w = input.width,
+        h = input.height,
+        scale = 1;
       if (opts.diameter !== undefined) {
         const r = diameterResize(chw, w, h, { channels: 3, diameter: opts.diameter });
-        chw = r.data; w = r.width; h = r.height; scale = r.scale;
+        chw = r.data;
+        w = r.width;
+        h = r.height;
+        scale = r.scale;
       }
       chw = normalizePerChannel(chw, 3, w * h, opts.normalize ?? {});
 
@@ -238,7 +268,9 @@ export class Cellpose {
         const r = await this._runTile(t.tile, tileSize);
         out.push({
           flows_cellprob: r.flowsCellprob,
-          tx: t.tx, ty: t.ty, bsize: tileSize,
+          tx: t.tx,
+          ty: t.ty,
+          bsize: tileSize,
           inferenceMs: r.inferenceMs,
         });
         opts.onTileProgress?.(i + 1, tiles.length);
@@ -249,8 +281,9 @@ export class Cellpose {
       // right algorithm choice (vs per-tile dynamics + label stitching).
       const tPost = performance.now();
       const averaged = averageTiles(
-        out.map(o => ({ flowsCellprob: o.flows_cellprob, tx: o.tx, ty: o.ty, bsize: o.bsize })),
-        h, w,
+        out.map((o) => ({ flowsCellprob: o.flows_cellprob, tx: o.tx, ty: o.ty, bsize: o.bsize })),
+        h,
+        w,
       );
       const hwFull = h * w;
       const dPFull = averaged.data.subarray(0, 2 * hwFull) as Float32Array;
@@ -260,7 +293,8 @@ export class Cellpose {
       // Inverse-resize labels back to source resolution if a diameter resize
       // was applied (nearest-neighbor — labels must not be interpolated).
       let masksSrc = m.masks;
-      let outW = w, outH = h;
+      let outW = w,
+        outH = h;
       if (scale !== 1) {
         outW = input.width;
         outH = input.height;

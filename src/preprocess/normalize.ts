@@ -53,7 +53,7 @@ export function normalizePerChannel(
   chw: Float32Array,
   channels: number,
   hw: number,
-  opts: NormalizeOptions = {}
+  opts: NormalizeOptions = {},
 ): Float32Array {
   const { lower = 1, upper = 99, invert = false } = opts;
   if (chw.length !== channels * hw) {

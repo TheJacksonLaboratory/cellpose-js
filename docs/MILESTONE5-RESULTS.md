@@ -3,8 +3,8 @@
 Companion to `PLAN.md`, `STAGE0-RESULTS.md`,
 `MILESTONE1-RESULTS.md`, `MILESTONE2-RESULTS.md`,
 `MILESTONE3-RESULTS.md`, and `MILESTONE4-RESULTS.md`.
-Verdict on the Milestone 5 exit criterion: *cross-tile output coherence —
-cells that span tile borders appear as single instances at source resolution.*
+Verdict on the Milestone 5 exit criterion: _cross-tile output coherence —
+cells that span tile borders appear as single instances at source resolution._
 
 **Date run:** 2026-05-14
 **Verdict:** **PASS**. Phase 1's algorithm work is complete; M6 (polish + publish)
@@ -24,10 +24,10 @@ algorithmic choice for JS.
 
 ### The asymptotic argument
 
-| Approach | Total work | Constant |
-|---|---|---|
-| Per-tile dynamics + label-merging stitch (original M5 plan) | O(H·W · niter) | ~1.2× — every overlap-zone pixel runs Euler integration in each tile that covers it (10% overlap → 20% redundancy) |
-| **Average predictions → single full-image dynamics** (M5 actual) | O(H·W · niter) | 1.0× — each pixel sees Euler exactly once |
+| Approach                                                         | Total work     | Constant                                                                                                           |
+| ---------------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Per-tile dynamics + label-merging stitch (original M5 plan)      | O(H·W · niter) | ~1.2× — every overlap-zone pixel runs Euler integration in each tile that covers it (10% overlap → 20% redundancy) |
+| **Average predictions → single full-image dynamics** (M5 actual) | O(H·W · niter) | 1.0× — each pixel sees Euler exactly once                                                                          |
 
 Both are O(H·W · niter), but the averaging approach has **better constants AND
 produces smoother boundaries** because the taper window down-weights each
@@ -36,11 +36,11 @@ matching, no edge-case label-collision handling).
 
 JS-specific alternatives considered and rejected for v1:
 
-| Alternative | Speedup | Why rejected |
-|---|---|---|
-| WASM-compiled Euler loop | 3–5× constant | Adds a WASM module to build; current 74 ms postprocess is already fine. Filed as post-M7 optimization. |
-| WebGPU compute shader for dynamics | 10–20× | Significant rewrite; not budgeted. |
-| Parallelize dynamics across tiles | 4× theoretical | Reintroduces the per-tile redundancy problem this section starts with. Worse, not better. |
+| Alternative                        | Speedup        | Why rejected                                                                                           |
+| ---------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
+| WASM-compiled Euler loop           | 3–5× constant  | Adds a WASM module to build; current 74 ms postprocess is already fine. Filed as post-M7 optimization. |
+| WebGPU compute shader for dynamics | 10–20×         | Significant rewrite; not budgeted.                                                                     |
+| Parallelize dynamics across tiles  | 4× theoretical | Reintroduces the per-tile redundancy problem this section starts with. Worse, not better.              |
 
 ### The pivot was a 2-hour reduction in scope
 
@@ -55,13 +55,13 @@ Same observable behaviour, less code.
 
 ## Exit criterion check
 
-| Criterion | Target | Result |
-|---|---|---|
-| Cells spanning tile borders → single instance | qualitative: no truncation in masks overlay | ✅ — synthetic 400×400 shows 4 contiguous blobs vs M4's 7 (where each cross-border blob was double-counted) |
-| `averageTiles` algorithm correctness | round-trip parity (tile then average back) | ✅ — 4/4 cases max abs err < 1e-5 |
-| Mean IoU ≥ 0.85 vs Python full-image dynamics | plan gate | ⏳ deferred to M5 follow-up alongside M4's 20-image rig — needs a real-CPSAM-output fixture |
-| Inverse-resize for diameter-rescaled inputs | nearest-neighbor mapping back to source resolution | ✅ — implemented inline in `segment()`, label values preserved exactly |
-| No per-tile work duplication | postprocess time should drop vs M4's per-tile dynamics | ✅ — 74 ms (M5) vs 212 ms (M4 per-tile) on the same synthetic — 2.9× faster |
+| Criterion                                     | Target                                                 | Result                                                                                                      |
+| --------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Cells spanning tile borders → single instance | qualitative: no truncation in masks overlay            | ✅ — synthetic 400×400 shows 4 contiguous blobs vs M4's 7 (where each cross-border blob was double-counted) |
+| `averageTiles` algorithm correctness          | round-trip parity (tile then average back)             | ✅ — 4/4 cases max abs err < 1e-5                                                                           |
+| Mean IoU ≥ 0.85 vs Python full-image dynamics | plan gate                                              | ⏳ deferred to M5 follow-up alongside M4's 20-image rig — needs a real-CPSAM-output fixture                 |
+| Inverse-resize for diameter-rescaled inputs   | nearest-neighbor mapping back to source resolution     | ✅ — implemented inline in `segment()`, label values preserved exactly                                      |
+| No per-tile work duplication                  | postprocess time should drop vs M4's per-tile dynamics | ✅ — 74 ms (M5) vs 212 ms (M4 per-tile) on the same synthetic — 2.9× faster                                 |
 
 ## Headline numbers
 

@@ -38,13 +38,14 @@ export interface FollowFlowsResult {
 export function followFlows(
   dP: Float32Array,
   cellprob: Float32Array,
-  H: number, W: number,
+  H: number,
+  W: number,
   cellprobThreshold = 0.0,
-  niter = 200
+  niter = 200,
 ): FollowFlowsResult {
   const hw = H * W;
-  if (dP.length !== 2 * hw)        throw new Error(`dP wrong size: ${dP.length} vs ${2 * hw}`);
-  if (cellprob.length !== hw)      throw new Error(`cellprob wrong size: ${cellprob.length} vs ${hw}`);
+  if (dP.length !== 2 * hw) throw new Error(`dP wrong size: ${dP.length} vs ${2 * hw}`);
+  if (cellprob.length !== hw) throw new Error(`cellprob wrong size: ${cellprob.length} vs ${hw}`);
 
   // Collect seed indices.
   const seedYArr: number[] = [];
@@ -94,7 +95,8 @@ export function followFlows(
     const x0 = Math.floor(ux);
     const fy = uy - y0;
     const fx = ux - x0;
-    let dy = 0, dx = 0;
+    let dy = 0,
+      dx = 0;
     // Four corners with bounds checks (zero padding outside).
     for (let by = 0; by < 2; by++) {
       const yy = y0 + by;
@@ -120,8 +122,10 @@ export function followFlows(
       sampleAt(gY[i] as number, gX[i] as number, tmp);
       let ny = (gY[i] as number) + tmp.dy;
       let nx = (gX[i] as number) + tmp.dx;
-      if (ny >  1) ny =  1; else if (ny < -1) ny = -1;
-      if (nx >  1) nx =  1; else if (nx < -1) nx = -1;
+      if (ny > 1) ny = 1;
+      else if (ny < -1) ny = -1;
+      if (nx > 1) nx = 1;
+      else if (nx < -1) nx = -1;
       gY[i] = ny;
       gX[i] = nx;
     }
@@ -130,7 +134,7 @@ export function followFlows(
   // Un-normalize and round to int.
   const pFinal = new Int32Array(2 * n);
   for (let i = 0; i < n; i++) {
-    pFinal[2 * i]     = Math.round(((gY[i] as number) + 1) * 0.5 * (H - 1));
+    pFinal[2 * i] = Math.round(((gY[i] as number) + 1) * 0.5 * (H - 1));
     pFinal[2 * i + 1] = Math.round(((gX[i] as number) + 1) * 0.5 * (W - 1));
   }
   return { pFinal, seedY, seedX };

@@ -1,8 +1,8 @@
 # Cellpose.js — Milestone 7 Results
 
 Companion to [`PLAN.md`](./PLAN.md) and the prior memos (Stage 0 + M1–M5).
-Verdict on the M7 exit criterion: *new `cellpose-segment` op visible in
-jit-ui's pipeline dialog, runs end-to-end, overlays masks, abortable.*
+Verdict on the M7 exit criterion: _new `cellpose-segment` op visible in
+jit-ui's pipeline dialog, runs end-to-end, overlays masks, abortable._
 
 **Date run:** 2026-05-15
 **Verdict:** **PASS**. Phase 1 is complete.
@@ -14,12 +14,12 @@ jit-ui's pipeline dialog, runs end-to-end, overlays masks, abortable.*
 
 ## Exit criterion check
 
-| Plan-mandated gate | Status | Evidence |
-|---|---|---|
-| Op visible in pipeline dialog | ✅ | "Cellpose-SAM Segment" appears under segmentation when a step is added |
-| Runs | ✅ T2/T3 | Cold-download progress bar 0→100% monotonic, status cascade through preprocess / inference / dynamics, returns within expected latency |
-| Overlays masks | ✅ T3 | Real RGB cellular image produces per-cell colored mask overlay at 55% alpha |
-| Abortable | ✅ T4 | Cancel mid-run terminates the cellpose-js worker within ~50 ms; no `signal is aborted without reason` error; next run respawns cleanly |
+| Plan-mandated gate            | Status   | Evidence                                                                                                                               |
+| ----------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Op visible in pipeline dialog | ✅       | "Cellpose-SAM Segment" appears under segmentation when a step is added                                                                 |
+| Runs                          | ✅ T2/T3 | Cold-download progress bar 0→100% monotonic, status cascade through preprocess / inference / dynamics, returns within expected latency |
+| Overlays masks                | ✅ T3    | Real RGB cellular image produces per-cell colored mask overlay at 55% alpha                                                            |
+| Abortable                     | ✅ T4    | Cancel mid-run terminates the cellpose-js worker within ~50 ms; no `signal is aborted without reason` error; next run respawns cleanly |
 
 ## jit-ui changes (uncommitted, local working tree)
 
@@ -27,7 +27,7 @@ jit-ui's pipeline dialog, runs end-to-end, overlays masks, abortable.*
 - **New engine** at `apps/jit-ui/src/app/main/models/processing-pipeline/engines/cellpose/cellpose-engine.ts`:
   - Lazy-initialized (`initialize()` only configures the ORT WASM path, doesn't fetch the 588 MB model).
   - Caches `Cellpose` instances by `modelUrl` in a Map so concurrent param-change re-invocations don't re-download.
-  - Exposes `progress$` (`ModelDownloadProgress | null`) and `status$` (`string | null`) Observables — see *Added UX* below.
+  - Exposes `progress$` (`ModelDownloadProgress | null`) and `status$` (`string | null`) Observables — see _Added UX_ below.
   - Per-call `AbortController` wired into `cp.segment({ signal })`. `cancelCurrentOperation()` aborts it. We deliberately do NOT auto-abort on each new `execute()` call (an earlier version did, and produced spurious "signal is aborted without reason" errors when the pipeline executor re-invoked execute for param-preview).
   - In-flight download dedup: a `Map<modelUrl, Promise<Cellpose>>` prevents two concurrent `execute()` calls from triggering parallel fetches that would interleave progress events and make the bar oscillate.
 - **Engine registration** — `processing-pipeline.module.ts` now `registry.register(new CellposeEngine())` alongside the existing engines.
@@ -43,7 +43,7 @@ jit-ui's pipeline dialog, runs end-to-end, overlays masks, abortable.*
 
 The M7 milestone surfaced more landmines than any prior one. Worth recording:
 
-1. **`onnxruntime-web` ESM default is WASM-only.** First execute() failed with the protobuf parser's `e.getValue is not a function` deep inside ORT. Cause: importing from `'onnxruntime-web'` instead of `'onnxruntime-web/webgpu'`. The WebGPU EP isn't registered without the subpath import. Already fixed in cellpose-js M1 source, but the symptom recurred here on first jit-ui consumption because we'd never seen what *runtime* failure mode the wrong entry produces. Cross-referenced in M1 results.
+1. **`onnxruntime-web` ESM default is WASM-only.** First execute() failed with the protobuf parser's `e.getValue is not a function` deep inside ORT. Cause: importing from `'onnxruntime-web'` instead of `'onnxruntime-web/webgpu'`. The WebGPU EP isn't registered without the subpath import. Already fixed in cellpose-js M1 source, but the symptom recurred here on first jit-ui consumption because we'd never seen what _runtime_ failure mode the wrong entry produces. Cross-referenced in M1 results.
 2. **Cross-origin dynamic `import()` of ORT WASM/JSEP sidecars is blocked.** ORT's WebGPU backend dynamically imports `ort-wasm-simd-threaded.asyncify.mjs` at runtime. Pointing `wasmPaths` at jsDelivr fails in modern browsers. Tried `public/ort/` in Vite (blocked by Vite's `?import` middleware), tried a Vite reverse-proxy (worked for the demo). For jit-ui, the right fix is Angular's `assets` glob (above), which materializes the sidecars at `/assets/ort/*` from node_modules at build/serve time.
 3. **`signal is aborted without reason` on first cellpose run.** Symptom: changing `chan` values seemed to "unblock" the operation. Cause: the engine's `execute()` did `this._abort?.abort()` at the start of every call to auto-cancel any in-flight previous run. But jit-ui's pipeline executor re-invokes `execute()` on param-preview, which means the SECOND call's auto-abort hit the first call's signal mid-flight. Removed the auto-abort; explicit `cancelCurrentOperation()` is the only thing that aborts now.
 4. **Diameter slider → browser OOM.** Small `diameter` values (e.g. 5 on a 600×400 image) caused 36× pixel-area upscale, browser allocator stalls, debugger pause. Added a hard cap in cellpose-js's `diameterResize` (max 4096×4096 output) with a descriptive thrown error.

@@ -1,8 +1,8 @@
 # Cellpose.js — Milestone 1 Results
 
 Companion to `PLAN.md` and `STAGE0-RESULTS.md`.
-Verdict on the Milestone 1 exit criterion: *loads the model, runs an identity
-forward pass on a tile*.
+Verdict on the Milestone 1 exit criterion: _loads the model, runs an identity
+forward pass on a tile_.
 
 **Date run:** 2026-05-14
 **Verdict:** **PASS**. Phase 1 work continues to Milestone 2 (preprocessing).
@@ -12,13 +12,13 @@ forward pass on a tile*.
 
 ## Exit criterion check
 
-| Criterion | Status | Evidence |
-|---|---|---|
-| `Cellpose.fromPretrained(url)` loads the FP16 ONNX | ✅ | `ready in 6.88 s` on first run; 2.20 s on second run (cache hit) |
-| Identity forward pass on a (1, 3, 256, 256) tile | ✅ | Output shape `(1, 3, 256, 256)`, 196608 FP32 floats, finite, range ≈ [-3.24, 2.22] |
-| WebGPU EP active, no WASM fallback | ✅ | `adapter: vendor=apple arch=metal-3` |
-| IndexedDB cache works on reload | ✅ | `ready in` dropped 6.88 s → 2.20 s on second visit |
-| Abort signal cancels in-flight work | ⏳ designed in, not exercised | Will be tested for real in M3 |
+| Criterion                                          | Status                        | Evidence                                                                           |
+| -------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------- |
+| `Cellpose.fromPretrained(url)` loads the FP16 ONNX | ✅                            | `ready in 6.88 s` on first run; 2.20 s on second run (cache hit)                   |
+| Identity forward pass on a (1, 3, 256, 256) tile   | ✅                            | Output shape `(1, 3, 256, 256)`, 196608 FP32 floats, finite, range ≈ [-3.24, 2.22] |
+| WebGPU EP active, no WASM fallback                 | ✅                            | `adapter: vendor=apple arch=metal-3`                                               |
+| IndexedDB cache works on reload                    | ✅                            | `ready in` dropped 6.88 s → 2.20 s on second visit                                 |
+| Abort signal cancels in-flight work                | ⏳ designed in, not exercised | Will be tested for real in M3                                                      |
 
 ## Headline numbers
 
@@ -46,12 +46,12 @@ inference median: 277 ms
 
 ## What changed since Stage 0
 
-| Metric | Stage 0 (Spike B) | Milestone 1 | Δ |
-|---|---|---|---|
-| ORT-web version | 1.20.1 (UMD) | 1.26.0 (ESM `/webgpu` entry) | newer |
-| Inference median | 628 ms | **277 ms** | **2.27× faster** |
-| Cold warmup | 2.29 s | 907 ms | 2.5× faster |
-| Session create | 1.31 s | ~1.9 s | slightly slower |
+| Metric           | Stage 0 (Spike B) | Milestone 1                  | Δ                |
+| ---------------- | ----------------- | ---------------------------- | ---------------- |
+| ORT-web version  | 1.20.1 (UMD)      | 1.26.0 (ESM `/webgpu` entry) | newer            |
+| Inference median | 628 ms            | **277 ms**                   | **2.27× faster** |
+| Cold warmup      | 2.29 s            | 907 ms                       | 2.5× faster      |
+| Session create   | 1.31 s            | ~1.9 s                       | slightly slower  |
 
 The 2.27× inference speedup is the most material finding. We accidentally
 landed on 1.26.0 because `^1.20.1` widened during `npm install`, but the
@@ -70,7 +70,7 @@ in code comments so they won't recur:
    ambient `Float16Array` shim in `src/types.d.ts`.
 
 2. **`onnxruntime-web` default ESM entry is WASM-only.** `import * as ort from
-   'onnxruntime-web'` resolves to the WASM-only build; the WebGPU EP lives at
+'onnxruntime-web'` resolves to the WASM-only build; the WebGPU EP lives at
    the subpath `onnxruntime-web/webgpu`. With the wrong import, ORT registered
    no WebGPU kernels and the protobuf parser blew up at session-create with a
    cryptic `e.getValue is not a function`. Documented at the imports in
@@ -82,7 +82,7 @@ in code comments so they won't recur:
    the dynamic `import()` to succeed. jsDelivr 1.20.1 didn't actually publish
    the JSEP/asyncify `.mjs` sidecars (they landed in later releases); 1.26.0
    has them. Solved via a Vite dev-server proxy at `/ort/* →
-   cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/*` (see
+cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/*` (see
    `examples/demo/vite.config.ts`). The version in that URL must stay in
    lock-step with `package.json`'s `onnxruntime-web` pin — a comment in the
    config file flags this.
@@ -94,7 +94,7 @@ in code comments so they won't recur:
    this entirely.
 
 5. **The IDB cache was a red herring during debugging of #2.** The first
-   manifestation of the `e.getValue` error happened *after* the fetch, which
+   manifestation of the `e.getValue` error happened _after_ the fetch, which
    pointed at the cache write. Two layers of best-effort wrappers were added
    (`tryCacheRead`, `tryCacheWrite` in `src/model-cache.ts`) so a corrupted
    IDB entry from a previous run cannot silently break future loads — useful
@@ -126,7 +126,7 @@ Built bundle: **6.18 kB** (gzipped 2.52 kB). Excludes `onnxruntime-web` and
   noise; `segmentRawTile()` doesn't normalize, doesn't tile, doesn't pick
   channels. The output values are stable but biologically meaningless.
 - **Flow dynamics** (M4): the FP32 output tensor sits in `flows_cellprob` with
-  no consumer. The 277 ms is *inference only* — full
+  no consumer. The 277 ms is _inference only_ — full
   segmentation latency will be inference + dynamics.
 - **Public model artifact**: the demo serves `cpsam_fp16.onnx` from a symlink
   to `~/cellpose-js-spike/`. The HF Hub upload (M6) is needed before the

@@ -3,6 +3,7 @@
 Browser-side Cellpose-SAM via a new `Cellpose.js` package, consumed by jit-ui as a new client-side operation in the processing pipeline.
 
 **Scope decisions (locked in):**
+
 - **Phase 1 only ships first** — port stock CPSAM to the browser. No SlimSAM-style compression in Phase 1.
 - **WebGPU required** — ship FP16, no WASM fallback in v1.
 - **Separate repo** `Cellpose.js` — not an Nx lib inside jit-ui.
@@ -13,16 +14,16 @@ Browser-side Cellpose-SAM via a new `Cellpose.js` package, consumed by jit-ui as
 
 ## Phase 1 status (as of 2026-05-15): COMPLETE — v0.1.0
 
-| Stage / Milestone | Status | Commit |
-|---|---|---|
-| Stage 0 — spike gates (export parity + WebGPU latency) | ✅ PASS — see [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md) | (pre-repo scratch rig) |
-| M1 — repo skeleton, fetch + IDB cache, ORT-WebGPU session | ✅ DONE — [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md) | `a0c1955` |
-| M2 — preprocess (normalize, channels, resize, tile) | ✅ DONE — [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md) | `3035fdf` |
-| M3 — inference worker, AbortSignal, tile progress | ✅ DONE — [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md) | `741f340` |
-| M4 — flow dynamics postprocessing (Euler + cluster + filter) | ✅ DONE (algo) — [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md) | `ddd5dc7` |
-| M5 — tile coherence (**pivoted** to averaging-then-single-dynamics) | ✅ DONE — [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md) | `8829838` |
-| M6 — package polish + HF Hub upload + GitHub publish | ✅ DONE (no npm publish — local-only per scope) | `df1218d`, `08e8564`, `a5e8319`, `73a3eb7` |
-| M7 — jit-ui integration | ✅ DONE — [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md) | (jit-ui local; not committed per scope) |
+| Stage / Milestone                                                   | Status                                                              | Commit                                     |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
+| Stage 0 — spike gates (export parity + WebGPU latency)              | ✅ PASS — see [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md)            | (pre-repo scratch rig)                     |
+| M1 — repo skeleton, fetch + IDB cache, ORT-WebGPU session           | ✅ DONE — [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md)        | `a0c1955`                                  |
+| M2 — preprocess (normalize, channels, resize, tile)                 | ✅ DONE — [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md)        | `3035fdf`                                  |
+| M3 — inference worker, AbortSignal, tile progress                   | ✅ DONE — [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md)        | `741f340`                                  |
+| M4 — flow dynamics postprocessing (Euler + cluster + filter)        | ✅ DONE (algo) — [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md) | `ddd5dc7`                                  |
+| M5 — tile coherence (**pivoted** to averaging-then-single-dynamics) | ✅ DONE — [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md)        | `8829838`                                  |
+| M6 — package polish + HF Hub upload + GitHub publish                | ✅ DONE (no npm publish — local-only per scope)                     | `df1218d`, `08e8564`, `a5e8319`, `73a3eb7` |
+| M7 — jit-ui integration                                             | ✅ DONE — [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md)        | (jit-ui local; not committed per scope)    |
 
 ### Phase 1 headline numbers (M1 Max, Chrome 135+, WebGPU)
 
@@ -52,6 +53,7 @@ Browser-side Cellpose-SAM via a new `Cellpose.js` package, consumed by jit-ui as
 
 **Stage 0 status: PASS** (2026-05-14, run on M1 Max). Full run report:
 [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md).
+
 - Spike A: worst FP32 parity error **1.24e-05** vs gate 1e-3.
 - Spike B: median **628 ms/tile** WebGPU vs gate 2 s; cold start ~2.3 s.
 - Deployment artifact: **588 MB** single-file FP16 ONNX with FP16 graph IO.
@@ -69,14 +71,14 @@ From `cellpose.vit_sam` and the Cellpose-SAM preprint (bioRxiv 2025.04.28):
   - `window_size = 0` on every block — all attention is global, no windowed attention
   - positional embeddings subsampled to match the new patch size
 - **Head:** very small dense regression head — `Conv2d(256, nout·ps²)` then a transposed conv that unfolds tokens back to pixels. `nout = 3` channels: **flow_y, flow_x, cellprob**.
-- **No prompt encoder. No mask decoder.** CPSAM is *not* promptable. It is a dense per-pixel regressor that reuses SAM weights as initialization.
+- **No prompt encoder. No mask decoder.** CPSAM is _not_ promptable. It is a dense per-pixel regressor that reuses SAM weights as initialization.
 - **Weights:** single ~**1.23 GB** PyTorch checkpoint at `mouseland/cellpose-sam` on Hugging Face.
 - **Training:** tiles around `bsize = 256`, diameters 7.5–120 px, 2D only.
 - **Post-processing (Python today):** flow-field Euler integration → pixel convergence clustering → connected components → size / flow-consistency filtering. NumPy + SciPy + Numba + a touch of OpenCV. ~500 LOC of real algorithm, no model.
 
 ### 1.2 What SlimSAM actually is — and why it isn't a CPSAM drop-in
 
-- SlimSAM (Chen et al., NeurIPS 2024) is **channel-pruned + distilled SAM-ViT-B** plus the *standard* SAM prompt encoder and SAM mask decoder. `Xenova/slimsam-50-uniform` is the ONNX export already wired into Transformers.js (jit-ui already uses the sibling `Xenova/sam-vit-base` in `transformers.worker.ts:238`).
+- SlimSAM (Chen et al., NeurIPS 2024) is **channel-pruned + distilled SAM-ViT-B** plus the _standard_ SAM prompt encoder and SAM mask decoder. `Xenova/slimsam-50-uniform` is the ONNX export already wired into Transformers.js (jit-ui already uses the sibling `Xenova/sam-vit-base` in `transformers.worker.ts:238`).
 - It is **promptable mask generation**, not dense regression. Outputs are `pred_masks` + `iou_scores`, given `input_points` / `input_boxes`.
 - It is **not a drop-in replacement** for CPSAM's head. Plugging SlimSAM in where CPSAM goes would produce per-prompt mask candidates, not flow-derived instance masks. Making a SlimSAM-style CPSAM would require either (a) pruning CPSAM's ViT-L while keeping its flow head, or (b) training a new flow head on top of SlimSAM's encoder. Both are multi-month ML work, out of scope for Phase 1.
 
@@ -87,7 +89,7 @@ From `cellpose.vit_sam` and the Cellpose-SAM preprint (bioRxiv 2025.04.28):
 - **Tile size 256 × global attention.** 256 / 8 = 32 tokens per side → 1024 tokens. Global attention at 1024 tokens is fine — equivalent compute to SAM's standard 64×64 grid.
 - **Per-tile latency.** **Measured 628 ms median on M1 Max WebGPU** for `(1, 3, 256, 256)` FP16 input. Cold start ~2.3 s on first forward pass (shader compile). Session create ~1.3 s.
 - **Flow dynamics in JS.** The Euler integration loop is the only non-trivial bit. ~200 lines of straightforward JS, with the option to promote the hot loop to WASM later if profiling demands it. No blockers.
-- **Existing pipeline fit.** The current `sam-auto-segment` worker (`transformers.worker.ts:237`) is the right template. CPSAM is *simpler* to integrate — one forward pass per tile, no per-point grid, then postprocessing.
+- **Existing pipeline fit.** The current `sam-auto-segment` worker (`transformers.worker.ts:237`) is the right template. CPSAM is _simpler_ to integrate — one forward pass per tile, no per-point grid, then postprocessing.
 - **Tiling.** CPSAM expects ~256-px tiles. Large images need a tile-and-stitch loop with overlap and mask-merge. ~150 LOC, required for production use on whole-slide imagery.
 - **Browser version floor.** The deployed FP16 ONNX has **FP16 graph IO** (input and output tensors are `float16`). ORT-web 1.20 requires the native `Float16Array` type for these tensors — available in **Chrome ≥135 (Feb 2025) and Safari ≥17.4**. Older browsers are not supported in v1.
 
@@ -101,7 +103,7 @@ From `cellpose.vit_sam` and the Cellpose-SAM preprint (bioRxiv 2025.04.28):
 
 WebGPU is the required runtime, and WebGPU runs FP16 natively well. Flow regression is more numerically sensitive than mask classification, so INT8 introduces a quality-validation budget we don't need to spend in v1. Ship FP16. Revisit INT8 only if download size complaints arrive.
 
-**FP16 production note (Stage 0 finding):** post-export FP16 conversion is *broken* on the dynamo-exported graph — `onnxconverter-common` leaves dangling FP16→FP32 type mismatches, and `onnxruntime.transformers.float16` generates duplicate node names. The working path is to **export directly in FP16** by instantiating `cellpose.vit_sam.Transformer(dtype=torch.float16)` and tracing from there. This produces FP16 graph IO, which is why the browser-version floor in §1.3 applies.
+**FP16 production note (Stage 0 finding):** post-export FP16 conversion is _broken_ on the dynamo-exported graph — `onnxconverter-common` leaves dangling FP16→FP32 type mismatches, and `onnxruntime.transformers.float16` generates duplicate node names. The working path is to **export directly in FP16** by instantiating `cellpose.vit_sam.Transformer(dtype=torch.float16)` and tracing from there. This produces FP16 graph IO, which is why the browser-version floor in §1.3 applies.
 
 ---
 
@@ -112,6 +114,7 @@ Scratch rig at `~/cellpose-js-spike/` (Python 3.11 venv, export scripts, ONNX
 artifacts, browser harness). Both gates passed on 2026-05-14.
 
 ### Spike A — ONNX export parity ✅ PASS
+
 - **NOT** via `optimum-cli` (cellpose's `Transformer` is not a HF Transformers
   class). Use `torch.onnx.export(net, dummy, …)` directly. Requires `onnxscript`
   as an extra dep for the torch 2.12 dynamo exporter.
@@ -122,6 +125,7 @@ artifacts, browser harness). Both gates passed on 2026-05-14.
 - **Measured worst error: 1.24e-05** (passes by ~80×).
 
 ### Spike B — WebGPU tile latency ✅ PASS
+
 - FP16 ONNX (export with `Transformer(dtype=torch.float16)` — see §1.5 finding).
 - After export, **merge externalized weights back into the .onnx file** with
   `onnx.save_model(..., save_as_external_data=False)` so the browser fetches a
@@ -165,7 +169,7 @@ artifacts, browser harness). Both gates passed on 2026-05-14.
 
 ```ts
 const cp = await Cellpose.fromPretrained('belkassaby/cellpose-sam-onnx', {
-  preload: true,  // create the ORT session eagerly; trades latency at construct time for a fast first segment()
+  preload: true, // create the ORT session eagerly; trades latency at construct time for a fast first segment()
 });
 const result = await cp.segment(rgbaImage, {
   diameter: 30,
@@ -189,16 +193,16 @@ Euler integration).
 
 ## 4. Milestones
 
-| # | Milestone | Effort | Exit criterion |
-|---|-----------|--------|----------------|
-| 0 | Stage-0 spikes (export parity + WebGPU latency) | 2 days | **✅ DONE** — see [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md) |
-| 1 | Repo skeleton, ORT-WebGPU session loader, model fetch + IndexedDB cache | 2 days | **✅ DONE** (`a0c1955`) — model loads, identity forward pass succeeds, IDB cache hits on reload |
-| 2 | Pre-processing port (`cellpose.transforms`): percentile normalization, diameter-resize, tiling, channel selection | 3 days | **✅ DONE** (`3035fdf`) — 7/7 parity tests pass against numpy fixtures |
-| 3 | Per-tile inference with WebGPU EP, progress callback, abort signal | 2 days | **✅ DONE** (`741f340`) — 277 ms median (Spike B was 628 ms); abort terminates < 50 ms |
-| 4 | Flow dynamics post-processing port (`cellpose.dynamics`): Euler integration, convergence clustering, connected components, size + flow-consistency filtering | 5 days | **✅ DONE** (`ddd5dc7`) — single-cell IoU 1.000, empty 1.000; 20-real-image rig deferred |
-| 5 | Tile stitching with IoU-based label merging in overlap regions | 2 days | **✅ DONE — pivoted** (`8829838`) — replaced with `average_tiles` + single full-image dynamics (Python's actual approach; same asymptotic complexity, better constants) |
-| 6 | API polish, README with quality + perf numbers, npm publish | 2 days | **✅ DONE** except npm publish (scoped local-only) — `df1218d`, `08e8564`, `a5e8319`, `73a3eb7` |
-| 7 | **jit-ui integration** | 2 days | **✅ DONE** — [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md). All four plan-mandated gates pass (visible, runs, overlays masks, abortable) |
+| #   | Milestone                                                                                                                                                    | Effort | Exit criterion                                                                                                                                                          |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | Stage-0 spikes (export parity + WebGPU latency)                                                                                                              | 2 days | **✅ DONE** — see [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md)                                                                                                            |
+| 1   | Repo skeleton, ORT-WebGPU session loader, model fetch + IndexedDB cache                                                                                      | 2 days | **✅ DONE** (`a0c1955`) — model loads, identity forward pass succeeds, IDB cache hits on reload                                                                         |
+| 2   | Pre-processing port (`cellpose.transforms`): percentile normalization, diameter-resize, tiling, channel selection                                            | 3 days | **✅ DONE** (`3035fdf`) — 7/7 parity tests pass against numpy fixtures                                                                                                  |
+| 3   | Per-tile inference with WebGPU EP, progress callback, abort signal                                                                                           | 2 days | **✅ DONE** (`741f340`) — 277 ms median (Spike B was 628 ms); abort terminates < 50 ms                                                                                  |
+| 4   | Flow dynamics post-processing port (`cellpose.dynamics`): Euler integration, convergence clustering, connected components, size + flow-consistency filtering | 5 days | **✅ DONE** (`ddd5dc7`) — single-cell IoU 1.000, empty 1.000; 20-real-image rig deferred                                                                                |
+| 5   | Tile stitching with IoU-based label merging in overlap regions                                                                                               | 2 days | **✅ DONE — pivoted** (`8829838`) — replaced with `average_tiles` + single full-image dynamics (Python's actual approach; same asymptotic complexity, better constants) |
+| 6   | API polish, README with quality + perf numbers, npm publish                                                                                                  | 2 days | **✅ DONE** except npm publish (scoped local-only) — `df1218d`, `08e8564`, `a5e8319`, `73a3eb7`                                                                         |
+| 7   | **jit-ui integration**                                                                                                                                       | 2 days | **✅ DONE** — [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md). All four plan-mandated gates pass (visible, runs, overlays masks, abortable)                          |
 
 **Total:** ~3.5 weeks of focused work, assuming both spikes pass.
 
@@ -207,11 +211,13 @@ Euler integration).
 ## 5. Per-Milestone Detail
 
 ### Milestone 0 — Stage-0 spikes
+
 See §2. Two scripts, one for export parity, one for WebGPU latency. Output is a go/no-go memo.
 
 ### Milestone 1 — Repo skeleton
 
 **Status:** ✅ DONE — commit `a0c1955`. Full report: [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md). 5 friction points documented (ORT-web ESM entry, dynamic-import same-origin requirement, etc.).
+
 - New repo `Cellpose.js`, BSD-3 or MIT.
 - `package.json` with ESM-only build via Vite library mode.
 - `Cellpose.fromPretrained(modelId, { preload })` loads ORT session with WebGPU
@@ -227,6 +233,7 @@ See §2. Two scripts, one for export parity, one for WebGPU latency. Output is a
 
 **Status:** ✅ DONE — commit `3035fdf`. Full report: [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md). 7/7 parity tests pass against numpy fixtures (normalize max abs err < 1e-5, tiling bit-exact on valid region). Browser bilinear ≠ cv2.INTER_LINEAR — qualitative validation only for `diameterResize` in M2.
 Port from `cellpose.transforms`:
+
 1. **Normalization:** per-channel 1st/99th percentile rescaling to [0, 1], optional invert.
 2. **Resize-to-diameter:** if user supplies `diameter`, resize so target ≈ 30 px (CPSAM's training median).
 3. **Tiling:** split image into 256×256 tiles with 32-px overlap; pad edges; output `{ tile, tx, ty }` records.
@@ -235,6 +242,7 @@ Port from `cellpose.transforms`:
 ### Milestone 3 — Inference
 
 **Status:** ✅ DONE — commit `741f340`. Full report: [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md). 277 ms median per tile (vs Spike B 628 ms — ORT 1.26 is ~2.3× faster than 1.20). Worker offload eliminates UI jank. Abort latency < 50 ms; post-abort respawn from IDB cache works.
+
 - WebGPU EP only.
 - Input tensor: `(1, 3, 256, 256)` as `Float16Array`. Build from the
   preprocessed `Float32Array` via direct assignment (`Float16Array` auto-rounds
@@ -250,6 +258,7 @@ Port from `cellpose.transforms`:
 
 **Status:** ✅ DONE (algorithm) — commit `ddd5dc7`. Full report: [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md). Per-tile dynamics ~53 ms. single-cell IoU 1.000, empty 1.000, three-cells 0.601 (synthetic-overlap noise — 3 of 5 labels match >0.95). The 20-real-image IoU rig is filed as Phase 1 follow-up. `remove_bad_flow_masks` (flow-consistency filter) and `fill_holes_and_remove_small_masks` deferred until a real-image case demands them.
 Port `cellpose.dynamics`:
+
 1. Threshold `cellprob > threshold` (default 0).
 2. Euler-integrate flows ~200 steps; record each pixel's convergence point.
 3. Histogram-bin convergence points into a 2D grid; peaks → seed labels.
@@ -261,6 +270,7 @@ Implement in pure JS first for correctness, profile, promote hot loops to WASM o
 ### Milestone 5 — Tile stitching (PIVOTED to averaging-then-dynamics)
 
 **Status:** ✅ DONE — commit `8829838`. Full report: [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md). The plan-as-written specified per-tile dynamics + IoU label-merging stitcher. During M4 I noticed Python uses `cellpose.transforms.average_tiles` to weighted-average per-tile predictions before dynamics, then runs dynamics ONCE on the full image. After asymptotic analysis (same O(H·W·niter), better constants, smoother boundaries) and a quick LOC count (~110 vs ~250), pivoted to mirror Python's approach. 4/4 round-trip tests on `averageTiles` pass at < 1e-5 max abs err; the synthetic 400×400 (4 blobs, 4 tiles) gives 4 contiguous instances across tile borders. Postprocess time dropped to ~74 ms (from 212 ms with per-tile dynamics).
+
 - Run dynamics per tile.
 - Merge across overlapping borders by matching labels with IoU > 0.5 in the overlap region.
 - Renumber labels globally.
@@ -269,6 +279,7 @@ Implement in pure JS first for correctness, profile, promote hot loops to WASM o
 ### Milestone 6 — Polish & publish
 
 **Status:** ✅ DONE (no npm publish, by scope decision). Commits: `df1218d` (initial polish), `08e8564` (HF Hub URL in demo), `a5e8319` (tsc build switch + memory cap), `73a3eb7` (docs import). M6 deviated in two ways: (a) switched the public build from Vite library mode to plain `tsc` after the Vite library build emitted webpack-incompatible worker URLs when consumed by jit-ui; (b) shipped to HF Hub at `Ballon999/cellpose-sam-onnx` and to GitHub at `belkassaby/Cellpose.js`. npm publish remains parked (local-only per scope).
+
 - README with quality (IoU vs Python CPSAM) and perf (ms/tile, ms/megapixel) numbers.
 - Versioned npm release.
 - Public model ID stable.
@@ -323,15 +334,15 @@ explicit go decision and a compute/budget allocation.**
 The list of targets needs cleanup before planning. The original ask combined
 architectures, model variants, and datasets:
 
-| Item                  | What it actually is                                              | SlimSAM strategy                                            |
-|-----------------------|------------------------------------------------------------------|-------------------------------------------------------------|
-| **CPSAM**             | ViT-L + flow head (Cellpose 4 default)                           | **Compress directly** — channel-prune + distill ViT-L       |
-| **cyto, cyto2, cyto3**| Pre-v4 **U-Net** generalist cytoplasm models (Cellpose 1/2/3)    | Re-train slim CPSAM head on cyto-style data — *not* prune U-Net |
-| **nuclei**            | Pre-v4 U-Net nuclei model                                        | Same as cyto: finetune slim CPSAM on nuclei corpus          |
-| **Bacteria (omni)**   | Omnipose `bact_phase_omni` / `bact_fluor_omni` — U-Net + Omnipose distance-transform postprocessing | Finetune slim CPSAM on bacteria images; keep CPSAM flow postprocessing (no need to port Omnipose dynamics) |
-| **Bacteria (omni+)**  | Omnipose's improved bacteria models (`bact_phase_cp`, `bact_phase_omnipose+`) | Same as above                                               |
-| **TissueNet**         | **Dataset**, not a model. Multi-channel tissue imaging.          | Finetune slim CPSAM on TissueNet                            |
-| **LiveCell**          | **Dataset**, not a model. Phase-contrast cell line images.       | Finetune slim CPSAM on LiveCell                             |
+| Item                   | What it actually is                                                                                 | SlimSAM strategy                                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **CPSAM**              | ViT-L + flow head (Cellpose 4 default)                                                              | **Compress directly** — channel-prune + distill ViT-L                                                      |
+| **cyto, cyto2, cyto3** | Pre-v4 **U-Net** generalist cytoplasm models (Cellpose 1/2/3)                                       | Re-train slim CPSAM head on cyto-style data — _not_ prune U-Net                                            |
+| **nuclei**             | Pre-v4 U-Net nuclei model                                                                           | Same as cyto: finetune slim CPSAM on nuclei corpus                                                         |
+| **Bacteria (omni)**    | Omnipose `bact_phase_omni` / `bact_fluor_omni` — U-Net + Omnipose distance-transform postprocessing | Finetune slim CPSAM on bacteria images; keep CPSAM flow postprocessing (no need to port Omnipose dynamics) |
+| **Bacteria (omni+)**   | Omnipose's improved bacteria models (`bact_phase_cp`, `bact_phase_omnipose+`)                       | Same as above                                                                                              |
+| **TissueNet**          | **Dataset**, not a model. Multi-channel tissue imaging.                                             | Finetune slim CPSAM on TissueNet                                                                           |
+| **LiveCell**           | **Dataset**, not a model. Phase-contrast cell line images.                                          | Finetune slim CPSAM on LiveCell                                                                            |
 
 Key insight: only CPSAM itself is a SAM-derived architecture. Everything else
 in the list is either a different architecture (U-Net) or a dataset. So the
@@ -343,14 +354,14 @@ Omnipose's distance-transform postprocessing.
 
 ### 7.2 Compute, data, and timeline preconditions
 
-| Resource | Need | Notes |
-|---|---|---|
-| GPU compute | ~500–1500 GPU-hours | A100/H100 preferred; a 4090 desktop is the floor (slower). The pruning-distill loop dominates. |
-| Labeled data | Public training corpora for each domain | TissueNet (gated — research registration), LiveCell (public), Omnipose bacteria (public via Cutler lab), Cellpose 4 training set (public via the Cellpose-SAM release), cyto/nuclei legacy (public via Cellpose 1–3 release) |
-| Storage | ~500 GB | Datasets + checkpoints + intermediate distillation states |
-| Eval infrastructure | Per-domain held-out test splits + matching metrics (per-instance IoU, AP@0.5, segmentation accuracy) | Reuse Cellpose's evaluation harness where possible |
-| Personnel | One ML engineer focused for ~3 months, or shared across ~5 months | The pruning recipe is non-trivial; expect iteration |
-| Cost | $5–20K in cloud GPU if not done on owned hardware | Lower if 4090 desktop is used end-to-end |
+| Resource            | Need                                                                                                 | Notes                                                                                                                                                                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GPU compute         | ~500–1500 GPU-hours                                                                                  | A100/H100 preferred; a 4090 desktop is the floor (slower). The pruning-distill loop dominates.                                                                                                                               |
+| Labeled data        | Public training corpora for each domain                                                              | TissueNet (gated — research registration), LiveCell (public), Omnipose bacteria (public via Cutler lab), Cellpose 4 training set (public via the Cellpose-SAM release), cyto/nuclei legacy (public via Cellpose 1–3 release) |
+| Storage             | ~500 GB                                                                                              | Datasets + checkpoints + intermediate distillation states                                                                                                                                                                    |
+| Eval infrastructure | Per-domain held-out test splits + matching metrics (per-instance IoU, AP@0.5, segmentation accuracy) | Reuse Cellpose's evaluation harness where possible                                                                                                                                                                           |
+| Personnel           | One ML engineer focused for ~3 months, or shared across ~5 months                                    | The pruning recipe is non-trivial; expect iteration                                                                                                                                                                          |
+| Cost                | $5–20K in cloud GPU if not done on owned hardware                                                    | Lower if 4090 desktop is used end-to-end                                                                                                                                                                                     |
 
 If any of these is missing, **the right call is to skip Phase 2** and rely on
 Phase 1's full-precision CPSAM in the browser.
@@ -367,6 +378,7 @@ adjusted pruning ratios). The flow head is small (~2 MB) and stays untouched
 structurally but may need finetuning after backbone pruning.
 
 **Steps**
+
 1. **Replicate SlimSAM training infra.** Reproduce the public SlimSAM training
    pipeline on a small SAM-ViT-B sanity check before touching CPSAM. Goal:
    confirm we can hit the published SlimSAM-50 IoU numbers within 2 points.
@@ -380,7 +392,7 @@ structurally but may need finetuning after backbone pruning.
      CPSAM flow outputs (`flow_y`, `flow_x`, `cellprob`).
    - Training data: Cellpose 4's public training corpus (the same data CPSAM
      was trained on).
-   Time-box: 4 weeks of training iteration.
+     Time-box: 4 weeks of training iteration.
 3. **Quality gate.** SlimCPSAM mean per-instance IoU on the Cellpose 4
    validation set must be **within 3 points** of full CPSAM. If we can't hit
    that, abandon Phase 2 — the slim model is not worth a domain-specific
@@ -395,18 +407,19 @@ structurally but may need finetuning after backbone pruning.
 Once SlimCPSAM exists and clears the quality gate, finetune it on each domain
 corpus.
 
-| Slim model | Training corpus | Source | License notes |
-|---|---|---|---|
-| `slimcpsam-cyto`     | Cellpose 1 cyto training data        | MouseLand `cellpose` release | BSD-3 |
-| `slimcpsam-cyto2`    | Cellpose 2 cyto2 training data       | MouseLand `cellpose` release | BSD-3 |
-| `slimcpsam-cyto3`    | Cellpose 3 cyto3 training data       | MouseLand `cellpose` release | BSD-3 |
-| `slimcpsam-nuclei`   | Cellpose nuclei training data        | MouseLand `cellpose` release | BSD-3 |
-| `slimcpsam-bact-omni`| Omnipose `bact_phase_omni` + `bact_fluor_omni` training data | kcutler `omnipose` release | MIT, with Cutler-lab attribution |
-| `slimcpsam-bact-omni+`| Omnipose's improved bacteria corpus | kcutler `omnipose` release | MIT |
-| `slimcpsam-tissuenet`| TissueNet                            | vanvalenlab (Caltech)        | Research-use license; registration required |
-| `slimcpsam-livecell` | LiveCell                             | Sartorius / Chalmers         | CC-BY-NC 4.0 (non-commercial!) |
+| Slim model             | Training corpus                                              | Source                       | License notes                               |
+| ---------------------- | ------------------------------------------------------------ | ---------------------------- | ------------------------------------------- |
+| `slimcpsam-cyto`       | Cellpose 1 cyto training data                                | MouseLand `cellpose` release | BSD-3                                       |
+| `slimcpsam-cyto2`      | Cellpose 2 cyto2 training data                               | MouseLand `cellpose` release | BSD-3                                       |
+| `slimcpsam-cyto3`      | Cellpose 3 cyto3 training data                               | MouseLand `cellpose` release | BSD-3                                       |
+| `slimcpsam-nuclei`     | Cellpose nuclei training data                                | MouseLand `cellpose` release | BSD-3                                       |
+| `slimcpsam-bact-omni`  | Omnipose `bact_phase_omni` + `bact_fluor_omni` training data | kcutler `omnipose` release   | MIT, with Cutler-lab attribution            |
+| `slimcpsam-bact-omni+` | Omnipose's improved bacteria corpus                          | kcutler `omnipose` release   | MIT                                         |
+| `slimcpsam-tissuenet`  | TissueNet                                                    | vanvalenlab (Caltech)        | Research-use license; registration required |
+| `slimcpsam-livecell`   | LiveCell                                                     | Sartorius / Chalmers         | CC-BY-NC 4.0 (non-commercial!)              |
 
 **Strategy per finetune**
+
 1. **Frozen backbone + head finetune (1–3 epochs).** Cheap, fast, often
    sufficient if the domain isn't far from CPSAM's training distribution.
 2. **Full finetune (5–10 epochs)** only if the frozen-backbone pass doesn't
@@ -435,7 +448,7 @@ After Phase 2, the `cellpose-js` API extends to support model selection:
 ```ts
 const cp = await Cellpose.fromPretrained('slimcpsam-cyto3', { preload: true });
 // or
-const cp = await Cellpose.fromPretrained('cpsam', { preload: true });   // Phase 1 full-precision
+const cp = await Cellpose.fromPretrained('cpsam', { preload: true }); // Phase 1 full-precision
 ```
 
 In jit-ui's pipeline-dialog operation descriptor, add a `model` dropdown to the
@@ -463,11 +476,13 @@ in IndexedDB. Add a "clear cached models" affordance in jit-ui settings.
 ## 8. Sources
 
 ### Phase 1 shipping artifacts (added 2026-05-15)
+
 - **cellpose-js code** — https://github.com/belkassaby/Cellpose.js (public, MIT). Commits: `a0c1955` (M1), `3035fdf` (M2), `741f340` (M3), `ddd5dc7` (M4), `8829838` (M5), `df1218d` + `08e8564` + `a5e8319` (M6), `73a3eb7` (docs import).
 - **CPSAM FP16 ONNX** — https://huggingface.co/Ballon999/cellpose-sam-onnx (public; 588 MB; ETag `52fd6881…` matches the Stage-0 source SHA-256).
 - **Per-milestone result memos** — [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md), [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md), [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md), [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md), [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md), [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md).
 
 ### Upstream references
+
 - [Cellpose-SAM: superhuman generalization for cellular segmentation (bioRxiv 2025.04.28)](https://www.biorxiv.org/content/10.1101/2025.04.28.651001v1)
 - [cellpose.vit_sam module source](https://cellpose.readthedocs.io/en/latest/_modules/cellpose/vit_sam.html)
 - [MouseLand/cellpose GitHub](https://github.com/MouseLand/cellpose)

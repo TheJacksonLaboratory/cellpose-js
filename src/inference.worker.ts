@@ -26,7 +26,11 @@ function configureOrt(wasmPaths: string | undefined): void {
   wasmPathsConfigured = true;
 }
 
-async function describeAdapter(): Promise<{ vendor: string; architecture: string; device: string } | null> {
+async function describeAdapter(): Promise<{
+  vendor: string;
+  architecture: string;
+  device: string;
+} | null> {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return null;
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) return null;
@@ -59,11 +63,12 @@ async function handleRunTile(msg: Extract<MainToWorker, { type: 'run-tile' }>): 
   const fp16 = new Float16Array(msg.tile.length);
   for (let i = 0; i < msg.tile.length; i++) fp16[i] = msg.tile[i] as number;
   // ort-web 1.26's TS types don't yet accept Float16Array directly; cast.
-  const tensor = new ort.Tensor(
-    'float16',
-    fp16 as unknown as Uint16Array,
-    [1, 3, msg.bsize, msg.bsize]
-  );
+  const tensor = new ort.Tensor('float16', fp16 as unknown as Uint16Array, [
+    1,
+    3,
+    msg.bsize,
+    msg.bsize,
+  ]);
 
   const t0 = performance.now();
   const outputs = await sess.run({ [sess.inputNames[0] as string]: tensor });
@@ -82,10 +87,9 @@ async function handleRunTile(msg: Extract<MainToWorker, { type: 'run-tile' }>): 
   const outF32 = new Float32Array(outF16.length);
   for (let i = 0; i < outF16.length; i++) outF32[i] = outF16[i] as number;
 
-  postReply(
-    { type: 'tile-result', tileId: msg.tileId, flowsCellprob: outF32, inferenceMs },
-    [outF32.buffer]
-  );
+  postReply({ type: 'tile-result', tileId: msg.tileId, flowsCellprob: outF32, inferenceMs }, [
+    outF32.buffer,
+  ]);
 }
 
 function postReply(msg: WorkerToMain, transfer?: Transferable[]): void {

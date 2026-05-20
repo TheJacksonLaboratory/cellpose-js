@@ -101,6 +101,7 @@ flow_y, flow_x, cellprob = out[0, 0], out[0, 1], out[0, 2]
 
 For flow-dynamics postprocessing (Euler integration → convergence clustering →
 connected components → size/flow filtering), use either:
+
 - the JS port in [`cellpose-js/src/dynamics`](https://github.com/belkassaby/Cellpose.js/tree/main/src), or
 - the original Python implementation in
   [`cellpose.dynamics`](https://cellpose.readthedocs.io/) — input/output
@@ -144,7 +145,7 @@ and [`docs/PLAN.md §1.5, §2`](https://github.com/belkassaby/Cellpose.js/blob/m
 The short version:
 
 1. **Source weights**: `mouseland/cellpose-sam` (PyTorch, 1.23 GB, 304.6 M params).
-2. **Wrap** `cellpose.vit_sam.Transformer` (this is *not* a HuggingFace
+2. **Wrap** `cellpose.vit_sam.Transformer` (this is _not_ a HuggingFace
    Transformers class — `optimum-cli` does not apply here).
 3. **Instantiate in FP16 directly**: `Transformer(dtype=torch.float16)` then
    load the FP32 checkpoint and cast. Post-export FP16 conversion via
@@ -173,17 +174,17 @@ The PyTorch and exporter versions used: `torch 2.12.0`, `cellpose 4.1.1`,
 It is the **same network, same weights, same outputs** — only the serialization
 format differs. Specifically:
 
-| Aspect              | `mouseland/cellpose-sam` (PyTorch) | This repo (ONNX FP16)                 |
-| ------------------- | ---------------------------------- | ------------------------------------- |
-| Format              | PyTorch `.pt` checkpoint           | ONNX, single file                     |
-| Size                | 1.23 GB                            | **588 MB**                            |
-| Precision           | FP32                               | **FP16**                              |
-| Runtime targets     | PyTorch (Python only)              | ORT WebGPU/CUDA/CPU/CoreML/DirectML   |
-| Input dtype         | `float32`                          | **`float16`** (native `Float16Array`) |
-| Input shape         | Variable; CPSAM tiles internally   | **Fixed `(1, 3, 256, 256)`**          |
-| Postprocessing      | Bundled in `cellpose.dynamics`     | **Not included** — caller's job       |
-| 3D segmentation     | Yes (`gradient_tracking_3D`)       | **No** — 2D only                      |
-| Promptable          | No (CPSAM is dense regression)     | No (unchanged)                        |
+| Aspect          | `mouseland/cellpose-sam` (PyTorch) | This repo (ONNX FP16)                 |
+| --------------- | ---------------------------------- | ------------------------------------- |
+| Format          | PyTorch `.pt` checkpoint           | ONNX, single file                     |
+| Size            | 1.23 GB                            | **588 MB**                            |
+| Precision       | FP32                               | **FP16**                              |
+| Runtime targets | PyTorch (Python only)              | ORT WebGPU/CUDA/CPU/CoreML/DirectML   |
+| Input dtype     | `float32`                          | **`float16`** (native `Float16Array`) |
+| Input shape     | Variable; CPSAM tiles internally   | **Fixed `(1, 3, 256, 256)`**          |
+| Postprocessing  | Bundled in `cellpose.dynamics`     | **Not included** — caller's job       |
+| 3D segmentation | Yes (`gradient_tracking_3D`)       | **No** — 2D only                      |
+| Promptable      | No (CPSAM is dense regression)     | No (unchanged)                        |
 
 **Numerical:** worst observed max abs error vs the FP32 PyTorch reference on the
 same input is **1.24e-05** — the FP16 export is numerically indistinguishable

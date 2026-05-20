@@ -155,6 +155,10 @@ The demo at `examples/demo/` is a complete client that exercises the full pipeli
 - Model and algorithm: [Cellpose-SAM (Stringer et al., 2025)](https://www.biorxiv.org/content/10.1101/2025.04.28.651001v1). Original implementation: [MouseLand/cellpose](https://github.com/MouseLand/cellpose) — BSD-3.
 - Inference runtime: [`onnxruntime-web`](https://github.com/microsoft/onnxruntime).
 
+## Security
+
+See [SECURITY.md](./SECURITY.md) for the threat model, reporting process, and recommended consumer practices.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).

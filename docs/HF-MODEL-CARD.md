@@ -48,8 +48,9 @@ This is the **same model** as `mouseland/cellpose-sam`, just re-packaged as a
 no pruning, no architecture changes. Numerical parity vs the PyTorch source is
 **1.24e-05 worst max-abs-error** across 10 random tiles (gate 1e-3).
 
-If you want a smaller model, this is not it — that's Phase 2 (SlimCPSAM),
-which has not been built yet.
+If you want a smaller model, this package isn't it — a SlimSAM-style
+compressed CPSAM would be a multi-month research effort and is not on the
+roadmap.
 
 ## Intended use
 
@@ -223,10 +224,12 @@ dynamics.
   is non-negotiable for FP16 graph IO under ORT-web 1.20+.
 - **Not promptable.** This is dense per-pixel regression, not SAM-style
   prompted segmentation.
-- **No domain-specialized variants.** This is the generalist CPSAM. Historical
-  Cellpose variants (cyto / cyto2 / cyto3 / nuclei) and Omnipose bacteria
-  models are not provided here — they are planned as **Phase 2** SlimCPSAM
-  finetunes and have not been built yet.
+- **No separately-packaged domain variants.** This is the generalist CPSAM.
+  Per Pachitariu et al. 2025, the base CPSAM weights are already trained on
+  the major public segmentation corpora (Cellpose 1/2/3 cyto+nuclei, LIVECell,
+  TissueNet, DeepBacs, Omnipose bact_phase/bact_fluor, NeurIPS 2022
+  multimodality challenge), so re-packaging a per-domain finetune from those
+  same datasets would be redundant.
 - **No INT8 / FP32 fallback.** WebGPU only.
 
 ## Citation

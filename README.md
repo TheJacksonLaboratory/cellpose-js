@@ -8,7 +8,7 @@
 
 Browser-side cellular segmentation powered by [Cellpose-SAM](https://github.com/MouseLand/cellpose), running on WebGPU. Faithful TypeScript port of the Cellpose-SAM inference + dynamics pipeline, designed for in-browser microscopy workflows without a server round-trip.
 
-> **Status:** v0.1.0 — first end-to-end-working release. Phase 1 from the [implementation plan](./docs/PLAN.md) is complete: model loading + IndexedDB cache, preprocessing, WebGPU inference in a worker, tile averaging, flow dynamics, full-image label maps. Phase 2 (SlimSAM-style compression + domain-specialized slim models) is planned but not started.
+> **Status:** v0.1.0 — first end-to-end-working release. The full port from the [implementation plan](./docs/PLAN.md) is complete: model loading + IndexedDB cache, preprocessing, WebGPU inference in a worker, tile averaging, flow dynamics, full-image label maps. SlimSAM-style compression and domain-specialized finetunes are out of scope — see the plan's §6 for the rationale.
 
 ## Highlights
 

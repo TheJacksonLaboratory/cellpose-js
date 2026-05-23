@@ -43,10 +43,17 @@ async function describeAdapter(): Promise<{
 }
 
 async function handleInit(msg: Extract<MainToWorker, { type: 'init' }>): Promise<void> {
+  postReply({ type: 'status', status: 'configuring ORT (loading WASM sidecars)' });
   configureOrt(msg.wasmPaths);
+  postReply({ type: 'status', status: 'creating ORT session (parsing 588 MB ONNX graph)' });
+  const t0 = performance.now();
   session = await ort.InferenceSession.create(msg.modelBytes, {
     executionProviders: ['webgpu'],
     graphOptimizationLevel: 'all',
+  });
+  postReply({
+    type: 'status',
+    status: `session created in ${(performance.now() - t0).toFixed(0)} ms; describing adapter`,
   });
   const adapterInfo = await describeAdapter();
   postReply({ type: 'ready', adapterInfo });
@@ -97,11 +104,19 @@ function postReply(msg: WorkerToMain, transfer?: Transferable[]): void {
   else self.postMessage(msg);
 }
 
+// Beacon: confirms the worker module loaded successfully (i.e. the
+// `import * as ort` at the top didn't throw). If the user never sees this
+// status string, the worker script itself failed to load — most often an
+// ORT-web import problem (Firefox without WebGPU, missing WASM sidecars, etc).
+postReply({ type: 'status', status: 'worker module loaded' });
+
 self.addEventListener('message', async (ev: MessageEvent<MainToWorker>) => {
   const msg = ev.data;
   try {
-    if (msg.type === 'init') await handleInit(msg);
-    else if (msg.type === 'run-tile') await handleRunTile(msg);
+    if (msg.type === 'init') {
+      postReply({ type: 'status', status: 'init message received' });
+      await handleInit(msg);
+    } else if (msg.type === 'run-tile') await handleRunTile(msg);
     else if (msg.type === 'dispose') {
       session = null;
       self.close();

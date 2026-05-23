@@ -20,7 +20,7 @@ const fmt = (ms: number) => (ms < 1000 ? `${ms.toFixed(0)} ms` : `${(ms / 1000).
 let cp: Cellpose | null = null;
 let currentImage: SegmentInput | null = null;
 
-async function ensureModel(): Promise<Cellpose> {
+async function ensureModel(signal?: AbortSignal): Promise<Cellpose> {
   if (cp) return cp;
   const modelUrl = $('modelUrl').value;
   const preload = ($('preload') as HTMLInputElement).checked;
@@ -28,18 +28,26 @@ async function ensureModel(): Promise<Cellpose> {
   log(`fromPretrained('${modelUrl}', { preload: ${preload}, bypassCache: ${bypassCache} })...`);
   const t0 = performance.now();
   let lastPctLogged = -1;
-  cp = await Cellpose.fromPretrained(modelUrl, {
+  const fetchT0 = { v: 0 };
+  const opts: Parameters<typeof Cellpose.fromPretrained>[1] = {
     preload,
     bypassCache,
     onProgress: ({ loaded, total }) => {
       if (!total) return;
       const pct = Math.floor((loaded / total) * 100);
       if (pct >= lastPctLogged + 10 || pct === 100) {
-        log(`  fetch: ${pct}%`);
+        log(`  fetch: ${pct}% (${fmt(performance.now() - t0)})`);
         lastPctLogged = pct;
+        if (pct === 100) fetchT0.v = performance.now();
       }
     },
-  });
+    onStatus: (s) => {
+      const since = fetchT0.v ? ` (+${fmt(performance.now() - fetchT0.v)} since fetch:100%)` : '';
+      log(`  worker: ${s}${since}`);
+    },
+  };
+  if (signal) opts.signal = signal;
+  cp = await Cellpose.fromPretrained(modelUrl, opts);
   log(`model ready in ${fmt(performance.now() - t0)}`);
   return cp;
 }
@@ -156,7 +164,19 @@ function drawHeatmap(canvas: HTMLCanvasElement, data: Float32Array, w: number, h
 }
 
 async function loadImageFile(file: File): Promise<SegmentInput> {
-  const bitmap = await createImageBitmap(file);
+  // `createImageBitmap` is the fast path (JPEG, PNG, WebP, GIF, BMP, ICO,
+  // SVG in most browsers). Microscopy users often have TIFF — that format
+  // isn't decoded natively by either createImageBitmap or HTMLImageElement,
+  // so we surface a clear error in the caller's try/catch.
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch (err) {
+    throw new Error(
+      `couldn't decode ${file.type || file.name}: ${(err as Error).message}. ` +
+        `Browsers don't natively decode TIFF — convert to PNG or JPEG first.`,
+    );
+  }
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(bitmap, 0, 0);
@@ -200,7 +220,9 @@ async function run() {
   ($('abort') as HTMLButtonElement).disabled = false;
   activeAbort = new AbortController();
   try {
-    const model = await ensureModel();
+    // Pass the signal so abort also cancels a stuck model load (fetch, IDB
+    // write, or ORT session create), not just segment().
+    const model = await ensureModel(activeAbort.signal);
     const adapter = await model.describeAdapter();
     log(`adapter: vendor=${adapter?.vendor} arch=${adapter?.architecture}`);
 
@@ -261,12 +283,19 @@ async function run() {
 $('imageFile').addEventListener('change', async (ev) => {
   const f = (ev.target as HTMLInputElement).files?.[0];
   if (!f) return;
-  currentImage = await loadImageFile(f);
-  drawToCanvas($('inputCanvas') as HTMLCanvasElement, currentImage);
-  ($('go') as HTMLButtonElement).disabled = false;
-  log(
-    `loaded ${f.name}: ${currentImage.width}x${currentImage.height}, ch=${currentImage.channels}`,
-  );
+  try {
+    currentImage = await loadImageFile(f);
+    drawToCanvas($('inputCanvas') as HTMLCanvasElement, currentImage);
+    ($('go') as HTMLButtonElement).disabled = false;
+    log(
+      `loaded ${f.name} (${f.type || 'unknown type'}): ` +
+        `${currentImage.width}x${currentImage.height}, ch=${currentImage.channels}`,
+    );
+  } catch (err) {
+    const e = err as Error;
+    log(`failed to load ${f.name}: ${e.message}`, 'fail');
+    console.error(err);
+  }
 });
 $('useSynthetic').addEventListener('click', () => {
   currentImage = makeSynthetic();

@@ -25,7 +25,13 @@ export interface FromPretrainedOptions {
   /** Forwarded to the model fetcher. */
   onProgress?: (p: FetchProgress) => void;
   bypassCache?: boolean;
+  /** Aborts the in-flight fetch AND any preload worker init. */
   signal?: AbortSignal;
+  /** Optional callback for worker-init phase strings ('spawning worker',
+   *  'creating ORT session', 'session ready'). Useful for showing a determinate
+   *  status while the 588 MB FP16 model is being parsed and the WebGPU adapter
+   *  is being initialized. */
+  onStatus?: (status: string) => void;
 }
 
 export interface SegmentTileOutput {
@@ -120,9 +126,15 @@ export class Cellpose {
       ...(opts.signal !== undefined && { signal: opts.signal }),
     };
     const bytes = await fetchModel(modelUrl, fetchOpts);
+    if (opts.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (opts.wasmPaths) configureOrt({ wasmPaths: opts.wasmPaths });
     const cp = new Cellpose(bytes, modelUrl);
-    if (opts.preload) await cp._ensureWorker();
+    if (opts.preload) {
+      const workerOpts: { signal?: AbortSignal; onStatus?: (s: string) => void } = {};
+      if (opts.signal !== undefined) workerOpts.signal = opts.signal;
+      if (opts.onStatus !== undefined) workerOpts.onStatus = opts.onStatus;
+      await cp._ensureWorker(workerOpts);
+    }
     return cp;
   }
 
@@ -136,13 +148,25 @@ export class Cellpose {
   }
 
   /** Lazy spawn + init. Idempotent. */
-  private _ensureWorker(): Promise<void> {
+  private _ensureWorker(
+    opts: { signal?: AbortSignal; onStatus?: (s: string) => void } = {},
+  ): Promise<void> {
     if (this._workerReady) return this._workerReady;
+    if (opts.signal?.aborted) {
+      return Promise.reject(new DOMException('Aborted before worker init', 'AbortError'));
+    }
 
+    opts.onStatus?.('spawning worker');
     const worker = new Worker(new URL('./inference.worker.js', import.meta.url), {
       type: 'module',
     });
     this._worker = worker;
+    // Track whether the worker has finished init. Before this flips true,
+    // a worker `error` event has nowhere to be reported (pending-tile queue
+    // is empty), so we route it to the init promise's reject instead. The
+    // ref is updated to a no-op once init completes.
+    let rejectInit: (err: Error) => void = () => {};
+    let initSettled = false;
 
     worker.addEventListener('message', (ev: MessageEvent<WorkerToMain>) => {
       const msg = ev.data;
@@ -159,27 +183,72 @@ export class Cellpose {
             this._pending.delete(msg.tileId);
             p.reject(new Error(msg.message));
           }
+        } else if (!initSettled) {
+          rejectInit(new Error(msg.message));
         }
+      } else if (msg.type === 'status') {
+        opts.onStatus?.(msg.status);
       }
     });
+    // The Worker.onerror event fires when the worker module fails to load
+    // or throws at top level. `ev.message` carries the underlying Error.
     worker.addEventListener('error', (ev) => {
-      const err = new Error(ev.message || 'worker error');
+      const detail =
+        ev.message ||
+        (ev.filename ? `worker error in ${ev.filename}:${ev.lineno}` : 'worker error (no detail)');
+      if (!initSettled) {
+        rejectInit(new Error(`worker module failed to load: ${detail}`));
+      }
+      for (const p of this._pending.values()) p.reject(new Error(detail));
+      this._pending.clear();
+    });
+    // messageerror fires when structured-clone deserialization fails on a
+    // message *received* by the worker (the failure is reported on the main
+    // side). Surface it the same way as error.
+    worker.addEventListener('messageerror', () => {
+      const err = new Error('worker received malformed message (structured-clone failure)');
+      if (!initSettled) rejectInit(err);
       for (const p of this._pending.values()) p.reject(err);
       this._pending.clear();
     });
 
     this._workerReady = new Promise<void>((resolve, reject) => {
+      let abortListener: (() => void) | null = null;
+      const cleanup = (): void => {
+        initSettled = true;
+        if (abortListener && opts.signal) {
+          opts.signal.removeEventListener('abort', abortListener);
+        }
+        worker.removeEventListener('message', onReady);
+      };
+      rejectInit = (err) => {
+        cleanup();
+        reject(err);
+      };
       const onReady = (ev: MessageEvent<WorkerToMain>) => {
         if (ev.data.type === 'ready') {
           this._adapterInfo = ev.data.adapterInfo;
-          worker.removeEventListener('message', onReady);
+          cleanup();
           resolve();
         } else if (ev.data.type === 'error' && ev.data.tileId === null) {
-          worker.removeEventListener('message', onReady);
+          cleanup();
           reject(new Error(ev.data.message));
         }
       };
       worker.addEventListener('message', onReady);
+
+      // Abort handling: terminate the worker and reject. Honors caller abort
+      // while ORT is doing its (potentially slow) WebGPU + WASM-sidecar init.
+      if (opts.signal) {
+        abortListener = () => {
+          cleanup();
+          this._worker?.terminate();
+          this._worker = null;
+          this._workerReady = null;
+          reject(new DOMException('Aborted during worker init', 'AbortError'));
+        };
+        opts.signal.addEventListener('abort', abortListener);
+      }
 
       // Resolve model bytes. If the previous worker took ownership (transfer
       // detached the buffer), refetch from IDB cache — typically <100 ms.
@@ -191,7 +260,9 @@ export class Cellpose {
       };
       ensureBytes()
         .then((bytes) => {
+          if (opts.signal?.aborted) return; // abort fired during fetch; listener already rejected
           this._modelBytes = null; // drop our ref since we're about to transfer ownership
+          opts.onStatus?.('posting model to worker');
           const init: MainToWorker = {
             type: 'init',
             modelBytes: bytes,
@@ -199,7 +270,10 @@ export class Cellpose {
           };
           worker.postMessage(init, [bytes]);
         })
-        .catch(reject);
+        .catch((err) => {
+          cleanup();
+          reject(err);
+        });
     });
     return this._workerReady;
   }

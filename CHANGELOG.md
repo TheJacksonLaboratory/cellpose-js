@@ -32,7 +32,7 @@ or regression-pinned consumers should review.
   `three_cells_192` fixture.
 - **README quickstart example.** `cellprob_threshold: 0` at the top level was
   silently ignored — the actual API nests it under `dynamics:
-  { cellprobThreshold }`. Also removed a stale "once published in M6
+{ cellprobThreshold }`. Also removed a stale "once published in M6
   follow-up" parenthetical referencing the model URL.
 - **Worker init errors no longer dropped.** `worker.onerror`,
   `worker.messageerror`, and worker-side `error` messages received before
@@ -51,7 +51,7 @@ or regression-pinned consumers should review.
   pre-ready phase strings from the inference worker (`'worker module loaded'`,
   `'init message received'`, `'configuring ORT (loading WASM sidecars)'`,
   `'creating ORT session (parsing 588 MB ONNX graph)'`, `'session created in
-  <ms> ms; describing adapter'`). Useful for showing a determinate status
+<ms> ms; describing adapter'`). Useful for showing a determinate status
   during the slow first-run worker init.
 - **Test coverage**: 14 → 61 tests across 11 files. New direct-coverage suites
   for `buildCpsamChannels`, `percentile`, `taperMask`, `followFlows`,

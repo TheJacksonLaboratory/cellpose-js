@@ -2,15 +2,15 @@
  * Diameter-aware resize, mirroring cellpose.transforms.resize_image with
  * cv2.INTER_LINEAR (bilinear) as the interpolation.
  *
- * Browser bilinear resize is not bit-exact to OpenCV's — they use different
- * edge handling and rounding. We expect mean abs error ~1e-3 vs cv2; the
- * fixture-based parity tests use a wider tolerance for resize than for
- * pure-math ops like normalize.
+ * Pure-JS Float32 bilinear — no canvas roundtrip. Earlier versions of this
+ * module pushed each channel through an OffscreenCanvas which quantized
+ * values to uint8 (~1/255 relative error per pixel). The canvas path also
+ * placed an environment dependency on OffscreenCanvas / HTMLCanvas, which
+ * isn't available in Node/test contexts.
  *
- * Implementation: use OffscreenCanvas where available (workers), HTMLCanvas
- * fallback for main-thread contexts. We resize one channel at a time as a
- * grayscale image (R = value, A = 255), read back as RGBA, and pull the R
- * channel.
+ * Pixel-center mapping matches OpenCV's INTER_LINEAR:
+ *   src_y = (dst_y + 0.5) * (srcH / dstH) - 0.5
+ * with edge replication (BORDER_REPLICATE) outside [0, N-1].
  */
 
 export interface ResizeResult {
@@ -33,41 +33,12 @@ export interface DiameterResizeOptions {
   targetDiameter?: number;
 }
 
-/** Create a 2D canvas context. Prefers OffscreenCanvas for worker contexts. */
-function createCanvas(
-  w: number,
-  h: number,
-): {
-  ctx: OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
-} {
-  if (typeof OffscreenCanvas !== 'undefined') {
-    const c = new OffscreenCanvas(w, h);
-    const ctx = c.getContext('2d');
-    if (!ctx) throw new Error('OffscreenCanvas 2d context unavailable');
-    return { ctx };
-  }
-  if (typeof document !== 'undefined') {
-    const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
-    const ctx = c.getContext('2d');
-    if (!ctx) throw new Error('HTMLCanvas 2d context unavailable');
-    return { ctx };
-  }
-  throw new Error('No canvas context available in this environment');
-}
-
 /**
- * Resize one channel using canvas bilinear.
+ * Resize one channel with bilinear interpolation on Float32 values.
  *
- * The channel data is packed into RGBA (R = value scaled to [0,255]), drawn,
- * resized, read back as RGBA, and the R channel is rescaled to the original
- * value range.
- *
- * This is lossy — values are quantized to uint8 in the canvas pipeline. For
- * percentile-normalized inputs in roughly [0, 1] this is acceptable (~1/255
- * quantization error). For raw images use the source-value range; callers
- * should normalize *after* resize if they need full precision.
+ * Pixel-center mapping is OpenCV's INTER_LINEAR convention:
+ *   src_y = (dst_y + 0.5) * (srcH / dstH) - 0.5
+ * Out-of-bounds samples replicate the nearest edge pixel (BORDER_REPLICATE).
  */
 function resizeChannel(
   src: Float32Array,
@@ -76,41 +47,42 @@ function resizeChannel(
   dstW: number,
   dstH: number,
 ): Float32Array {
-  // Find the channel's value range so quantization uses the full uint8.
-  let mn = Infinity,
-    mx = -Infinity;
-  for (let i = 0; i < src.length; i++) {
-    const v = src[i] as number;
-    if (v < mn) mn = v;
-    if (v > mx) mx = v;
-  }
-  const span = mx - mn || 1;
-
-  // Build the source ImageData.
-  const srcRgba = new Uint8ClampedArray(srcW * srcH * 4);
-  for (let i = 0; i < src.length; i++) {
-    const u8 = Math.max(0, Math.min(255, Math.round((((src[i] as number) - mn) / span) * 255)));
-    srcRgba[i * 4] = u8;
-    srcRgba[i * 4 + 1] = u8;
-    srcRgba[i * 4 + 2] = u8;
-    srcRgba[i * 4 + 3] = 255;
-  }
-  const srcImageData = new ImageData(srcRgba, srcW, srcH);
-
-  const { ctx: srcCtx } = createCanvas(srcW, srcH);
-  srcCtx.putImageData(srcImageData, 0, 0);
-
-  const { ctx: dstCtx } = createCanvas(dstW, dstH);
-  dstCtx.imageSmoothingEnabled = true;
-  dstCtx.imageSmoothingQuality = 'high';
-  // drawImage with a canvas source supports floating-point resizing via bilinear.
-  // OffscreenCanvas accepts itself as a CanvasImageSource.
-  dstCtx.drawImage(srcCtx.canvas as CanvasImageSource, 0, 0, dstW, dstH);
-
-  const dstRgba = dstCtx.getImageData(0, 0, dstW, dstH).data;
   const out = new Float32Array(dstW * dstH);
-  for (let i = 0; i < out.length; i++) {
-    out[i] = ((dstRgba[i * 4] as number) / 255) * span + mn;
+  const syScale = srcH / dstH;
+  const sxScale = srcW / dstW;
+  for (let dy = 0; dy < dstH; dy++) {
+    const sy = (dy + 0.5) * syScale - 0.5;
+    let y0 = Math.floor(sy);
+    let y1 = y0 + 1;
+    const fy = sy - y0;
+    // Edge-replicate clamps. Hot-path branchless mins/maxes are not worth the
+    // readability hit here — modern engines hoist these.
+    if (y0 < 0) y0 = 0;
+    else if (y0 > srcH - 1) y0 = srcH - 1;
+    if (y1 < 0) y1 = 0;
+    else if (y1 > srcH - 1) y1 = srcH - 1;
+    const row0 = y0 * srcW;
+    const row1 = y1 * srcW;
+    const dstRow = dy * dstW;
+    const wy1 = fy;
+    const wy0 = 1 - fy;
+    for (let dx = 0; dx < dstW; dx++) {
+      const sx = (dx + 0.5) * sxScale - 0.5;
+      let x0 = Math.floor(sx);
+      let x1 = x0 + 1;
+      const fx = sx - x0;
+      if (x0 < 0) x0 = 0;
+      else if (x0 > srcW - 1) x0 = srcW - 1;
+      if (x1 < 0) x1 = 0;
+      else if (x1 > srcW - 1) x1 = srcW - 1;
+      const v00 = src[row0 + x0] as number;
+      const v01 = src[row0 + x1] as number;
+      const v10 = src[row1 + x0] as number;
+      const v11 = src[row1 + x1] as number;
+      const v0 = v00 * (1 - fx) + v01 * fx;
+      const v1 = v10 * (1 - fx) + v11 * fx;
+      out[dstRow + dx] = v0 * wy0 + v1 * wy1;
+    }
   }
   return out;
 }
@@ -140,9 +112,9 @@ export function diameterResize(
   }
   const dstW = Math.max(1, Math.round(width * scale));
   const dstH = Math.max(1, Math.round(height * scale));
-  // Memory guard: the canvas-based per-channel resize allocates ~3 canvases
-  // per channel × 3 channels. A 4096x4096 destination already consumes
-  // ~300 MB across those canvases. Anything larger reliably OOMs.
+  // Memory guard: each resized channel allocates dstW*dstH Float32 values.
+  // For a 4096×4096 destination at 3 channels that's ~192 MB; anything
+  // larger reliably OOMs on memory-constrained devices.
   const MAX_PIXELS = 4096 * 4096;
   if (dstW * dstH > MAX_PIXELS) {
     throw new Error(

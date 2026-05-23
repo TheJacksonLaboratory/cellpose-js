@@ -19,4 +19,8 @@ export type MainToWorker =
 export type WorkerToMain =
   | { type: 'ready'; adapterInfo: { vendor: string; architecture: string; device: string } | null }
   | { type: 'tile-result'; tileId: number; flowsCellprob: Float32Array; inferenceMs: number }
-  | { type: 'error'; tileId: number | null; message: string };
+  | { type: 'error'; tileId: number | null; message: string }
+  // Pre-ready progress strings: 'configuring ORT', 'creating session',
+  // 'session created', 'describing adapter'. Optional; consumers wire via
+  // `FromPretrainedOptions.onStatus`.
+  | { type: 'status'; status: string };

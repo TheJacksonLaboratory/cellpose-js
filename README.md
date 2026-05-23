@@ -34,7 +34,7 @@ npm install cellpose-js onnxruntime-web
 
 You also need to host:
 
-1. **The model**: `cpsam_fp16.onnx` (588 MB). Either upload to your own CDN, or use the public copy at `https://huggingface.co/ballon999/cellpose-sam-onnx/resolve/main/cpsam_fp16.onnx` (once published in M6 follow-up).
+1. **The model**: `cpsam_fp16.onnx` (588 MB). Either upload to your own CDN, or use the public copy at `https://huggingface.co/ballon999/cellpose-sam-onnx/resolve/main/cpsam_fp16.onnx`.
 2. **ORT-web's WASM/JSEP sidecars**: ORT dynamically imports `.mjs` and `.wasm` files at runtime. They must be served **same-origin** with your app (cross-origin dynamic `import()` is blocked). Either copy `node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.{wasm,mjs,jsep.wasm,jsep.mjs,asyncify.wasm,asyncify.mjs}` to your public assets, or proxy `/ort/*` to jsDelivr at build time (see `examples/demo/vite.config.ts` for the recipe).
 
 ## Quickstart
@@ -60,9 +60,9 @@ const result = await cp.segment(
   { data: imageData.data, width: imageData.width, height: imageData.height, channels: 4 },
   {
     diameter: 30, // estimated cell diameter in source pixels (omit for native resolution)
-    cellprob_threshold: 0,
     chan: 0, // primary channel (0 = grayscale)
     chan2: 0, // secondary channel (0 = none)
+    dynamics: { cellprobThreshold: 0 }, // pixels above this enter the dynamical system
     onTileProgress: (done, total) => console.log(`tile ${done}/${total}`),
   },
 );

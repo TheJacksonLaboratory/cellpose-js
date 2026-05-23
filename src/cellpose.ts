@@ -249,6 +249,11 @@ export class Cellpose {
       let w = input.width,
         h = input.height,
         scale = 1;
+      // Match cellpose's order: normalize FIRST, then resize. (See
+      // models.py:_run_net: `transforms.normalize_img(x)` then
+      // `transforms.resize_image(imgi[b], rsz=rsz)`.) Resizing first would
+      // change the per-channel percentile statistics that drive normalization.
+      chw = normalizePerChannel(chw, 3, w * h, opts.normalize ?? {});
       if (opts.diameter !== undefined) {
         const r = diameterResize(chw, w, h, { channels: 3, diameter: opts.diameter });
         chw = r.data;
@@ -256,7 +261,6 @@ export class Cellpose {
         h = r.height;
         scale = r.scale;
       }
-      chw = normalizePerChannel(chw, 3, w * h, opts.normalize ?? {});
 
       const tileOpts: { bsize: number; overlap?: number } = { bsize: tileSize };
       if (opts.overlap !== undefined) tileOpts.overlap = opts.overlap;
@@ -288,7 +292,15 @@ export class Cellpose {
       const hwFull = h * w;
       const dPFull = averaged.data.subarray(0, 2 * hwFull) as Float32Array;
       const cpFull = averaged.data.subarray(2 * hwFull, 3 * hwFull) as Float32Array;
-      const m = computeMasks(dPFull, cpFull, h, w, opts.dynamics ?? {});
+      // Match cellpose's niter scaling: `niter = int(200 / image_scaling)`
+      // where image_scaling = 30 / diameter (== JS's `scale`). Upscaled images
+      // need fewer iterations (each step covers more source pixels) and
+      // downscaled images need more. Honors any explicit user override.
+      const dynOpts: ComputeMasksOptions = { ...(opts.dynamics ?? {}) };
+      if (dynOpts.niter === undefined && opts.diameter !== undefined && scale !== 1) {
+        dynOpts.niter = Math.max(1, Math.floor(200 / scale));
+      }
+      const m = computeMasks(dPFull, cpFull, h, w, dynOpts);
 
       // Inverse-resize labels back to source resolution if a diameter resize
       // was applied (nearest-neighbor — labels must not be interpolated).

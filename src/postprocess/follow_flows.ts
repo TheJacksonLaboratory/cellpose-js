@@ -131,11 +131,13 @@ export function followFlows(
     }
   }
 
-  // Un-normalize and round to int.
+  // Un-normalize and truncate to int. PyTorch's `.int()` cast truncates toward
+  // zero (it's a C-style cast), not round-to-nearest. gY/gX are clamped to
+  // [-1, 1] so (g+1)*0.5*(N-1) ∈ [0, N-1] and Math.trunc == Math.floor here.
   const pFinal = new Int32Array(2 * n);
   for (let i = 0; i < n; i++) {
-    pFinal[2 * i] = Math.round(((gY[i] as number) + 1) * 0.5 * (H - 1));
-    pFinal[2 * i + 1] = Math.round(((gX[i] as number) + 1) * 0.5 * (W - 1));
+    pFinal[2 * i] = Math.trunc(((gY[i] as number) + 1) * 0.5 * (H - 1));
+    pFinal[2 * i + 1] = Math.trunc(((gX[i] as number) + 1) * 0.5 * (W - 1));
   }
   return { pFinal, seedY, seedX };
 }

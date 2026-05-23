@@ -107,8 +107,8 @@ describe('followFlows', () => {
         const dy = c.y - y;
         const dx = c.x - x;
         const r = Math.hypot(dy, dx) || 1;
-        dP[i] = (dy / r) / 5;
-        dP[hw + i] = (dx / r) / 5;
+        dP[i] = dy / r / 5;
+        dP[hw + i] = dx / r / 5;
         cellprob[i] = 1.0;
       }
     }

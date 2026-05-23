@@ -26,13 +26,12 @@ interface Case {
 describe('compute_masks parity', () => {
   const cases: Case[] = [
     { name: 'single_cell_128', gate: 0.9 },
-    // three_cells_192's synthetic flow fields have overlapping basins of
-    // attraction where JS and Python converge to slightly different seed
-    // structures. 3 of 5 Python labels are matched at IoU > 0.95; 2 small
-    // labels in the overlap zone have IoU ≈ 0 because they're in
-    // numerical-noise territory. Gate set accordingly; the real M4 gate
-    // (mean IoU ≥ 0.9 on real CPSAM outputs) lives in a follow-up fixture.
-    { name: 'three_cells_192', gate: 0.55 },
+    // Pre-fix this fixture sat at 0.601 because JS used Math.round on the
+    // final convergence coordinates while PyTorch's `.int()` truncates. The
+    // 1-pixel shift split two small overlap-zone labels off their Python
+    // counterparts. After switching to Math.trunc all 5 labels match at IoU
+    // 1.000, so the gate is tightened here to catch any regression.
+    { name: 'three_cells_192', gate: 0.99 },
     { name: 'empty_96', gate: 0.99 },
   ];
   for (const c of cases) {

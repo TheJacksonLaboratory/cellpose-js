@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Full pipeline runs in the Web Worker.** `segment()` now offloads the
+  entire pipeline — preprocessing, per-tile inference, tile averaging, flow
+  dynamics, and inverse-resize — to the inference worker via a single
+  `segment` message, and transfers back only the final label map. Previously
+  only per-tile inference ran off-thread, so preprocessing and dynamics ran on
+  the main thread and blocked the UI. The public `segment(input, opts)` API and
+  `onTileProgress` are unchanged.
+
+### Removed
+
+- `SegmentOutput.tiles[].flows_cellprob` is now an empty `Float32Array` — the
+  per-tile flow tensors stay in the worker (returning them would defeat the
+  offload). The per-tile timing diagnostics (`tx`/`ty`/`bsize`/`inferenceMs`)
+  are unchanged.
+
 ## [0.2.0] — 2026-05-22
 
 Python-parity fixes plus quality-of-life additions surfaced by a code review

@@ -8,14 +8,14 @@
 
 Browser-side cellular segmentation powered by [Cellpose-SAM](https://github.com/MouseLand/cellpose), running on WebGPU. Faithful TypeScript port of the Cellpose-SAM inference + dynamics pipeline, designed for in-browser microscopy workflows without a server round-trip.
 
-> **Status:** v0.1.0 — first end-to-end-working release. The full port from the [implementation plan](./docs/PLAN.md) is complete: model loading + IndexedDB cache, preprocessing, WebGPU inference in a worker, tile averaging, flow dynamics, full-image label maps. SlimSAM-style compression and domain-specialized finetunes are out of scope — see the plan's §6 for the rationale.
+> **Status:** The full pipeline — preprocessing, WebGPU inference, tile averaging, and flow dynamics — runs in a Web Worker, so `segment()` never blocks the UI thread (earlier releases ran only per-tile inference off-thread). Model loading uses an IndexedDB cache. SlimSAM-style compression and domain-specialized finetunes are out of scope — see the [implementation plan](./docs/PLAN.md) §6.
 
 ## Highlights
 
 - **Single-call API**: `await Cellpose.fromPretrained(modelUrl)` → `await cp.segment(image, opts)` → a `Uint32Array` instance label map at source resolution.
 - **WebGPU inference** via `onnxruntime-web/webgpu`. Measured **~277 ms / 256×256 tile on an M1 Max**. Cold start ~2.3 s (one-time shader compile).
-- **Web Worker offload**: inference doesn't block the UI thread; AbortSignal terminates the worker mid-run with sub-100 ms latency.
-- **Faithful Python parity** for preprocess and dynamics — 14/14 vitest parity tests pass against numpy-generated `.npy` fixtures.
+- **Fully off the UI thread**: the entire pipeline (preprocess → inference → tile averaging → flow dynamics → resize) runs in a Web Worker via a single `segment` message; only the final label map is transferred back, so the UI never blocks. `AbortSignal` terminates the worker mid-run with sub-100 ms latency.
+- **Faithful Python parity** for preprocess and dynamics — vitest parity tests pass against numpy-generated `.npy` fixtures.
 - **IndexedDB cache** for the 588 MB FP16 model: first visit fetches from your CDN; subsequent visits load from local storage in <2 s.
 
 ## Browser requirements
@@ -72,7 +72,8 @@ console.log(`Found ${result.count} cells.`);
 // result.width      : number      — source image width
 // result.height     : number      — source image height
 // result.totalMs    : number      — wall-clock time for the segment() call
-// result.tiles      : per-tile diagnostics (flow tensors, inference time)
+// result.tiles      : per-tile timing diagnostics (tx/ty/bsize/inferenceMs).
+//                     Flow tensors stay in the worker, so flows_cellprob is empty.
 ```
 
 ## Parameter quick-reference
@@ -113,9 +114,11 @@ Rescales the image so the median cell occupies ~30 px (CPSAM's training median).
 
 ## Architecture
 
+The whole pipeline runs **inside the Web Worker**: the main thread posts the image with one `segment` message and receives the final `masks` (transferred back), so preprocessing and flow dynamics never block the UI.
+
 ```
 input image → buildCpsamChannels → diameterResize → normalizePerChannel → makeTiles
-                                                                              ⇣ (per tile, via worker)
+                                                                              ⇣ (per tile)
                                                               ort.InferenceSession.run
                                                                               ⇣
                                                                        averageTiles
@@ -132,7 +135,7 @@ See [`src/`](./src/) for module-level documentation.
 ## Testing
 
 ```sh
-npm run test         # vitest: 14 parity tests against numpy fixtures
+npm run test         # vitest: parity + unit tests against numpy fixtures
 npm run typecheck    # tsc --noEmit
 npm run build        # vite library build + tsc --emitDeclarationOnly
 npm run demo         # vite serve examples/demo

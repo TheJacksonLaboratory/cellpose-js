@@ -1,21 +1,16 @@
 /**
- * Public Cellpose API. Milestone 3: inference offloaded to a Web Worker,
- * AbortSignal-driven cancellation, tile-level progress.
+ * Public Cellpose API. The full segmentation pipeline (preprocess → tile →
+ * inference → average → dynamics → inverse-resize) runs in a Web Worker via the
+ * `segment` message, so nothing heavy runs on the UI thread. AbortSignal-driven
+ * cancellation and tile-level progress are supported. The legacy per-tile
+ * `_runTile` path is retained for back-compat.
  */
 import { assertSupportedEnvironment, describeAdapter } from './env.js';
 import { fetchModel, type FetchProgress } from './model-cache.js';
 import { configureOrt, _getWasmPaths } from './session.js';
-import {
-  buildCpsamChannels,
-  type ChannelMapOptions,
-  diameterResize,
-  normalizePerChannel,
-  type NormalizeOptions,
-  makeTiles,
-  type TileRecord,
-} from './preprocess/index.js';
-import { computeMasks, type ComputeMasksOptions, averageTiles } from './postprocess/index.js';
-import type { MainToWorker, WorkerToMain } from './worker-protocol.js';
+import { type ChannelMapOptions, type NormalizeOptions } from './preprocess/index.js';
+import { type ComputeMasksOptions } from './postprocess/index.js';
+import type { MainToWorker, WorkerToMain, WorkerSegmentOptions } from './worker-protocol.js';
 
 export interface FromPretrainedOptions {
   /** Eagerly create the inference worker + ORT session at construct time. */
@@ -71,8 +66,8 @@ export interface SegmentOutput {
   /** Width / height at source resolution. */
   width: number;
   height: number;
-  /** Per-tile diagnostics. Per-tile masks are NOT included (single global label
-   *  map is the v1 contract). */
+  /** Per-tile diagnostics (timing). Flow tensors stay in the worker, so
+   *  `flows_cellprob` is empty here — returning them would defeat the offload. */
   tiles: SegmentTileOutput[];
   /** Resized image dimensions (intermediate; pre-inverse-resize). */
   resizedWidth: number;
@@ -98,12 +93,20 @@ interface PendingTile {
   reject: (err: Error) => void;
 }
 
+interface PendingSegment {
+  resolve: (out: SegmentOutput) => void;
+  reject: (err: Error) => void;
+  onTileProgress?: (done: number, total: number) => void;
+  t0: number;
+}
+
 export class Cellpose {
   private _worker: Worker | null = null;
   private _workerReady: Promise<void> | null = null;
   private _adapterInfo: { vendor: string; architecture: string; device: string } | null = null;
-  private _nextTileId = 0;
   private _pending = new Map<number, PendingTile>();
+  private _nextReqId = 0;
+  private _pendingSegments = new Map<number, PendingSegment>();
 
   // _modelBytes is detached after the worker takes ownership of it. To respawn
   // after _abort() we re-fetch via fetchModel (cache hit -> instant).
@@ -162,8 +165,8 @@ export class Cellpose {
     });
     this._worker = worker;
     // Track whether the worker has finished init. Before this flips true,
-    // a worker `error` event has nowhere to be reported (pending-tile queue
-    // is empty), so we route it to the init promise's reject instead. The
+    // a worker `error` event has nowhere to be reported (pending queues are
+    // empty), so we route it to the init promise's reject instead. The
     // ref is updated to a no-op once init completes.
     let rejectInit: (err: Error) => void = () => {};
     let initSettled = false;
@@ -186,6 +189,35 @@ export class Cellpose {
         } else if (!initSettled) {
           rejectInit(new Error(msg.message));
         }
+      } else if (msg.type === 'segment-progress') {
+        // Only per-tile inference maps onto the public onTileProgress callback;
+        // the dynamics phase is signalled by the final (done===total) tile tick.
+        if (msg.phase === 'inference') {
+          this._pendingSegments.get(msg.reqId)?.onTileProgress?.(msg.done, msg.total);
+        }
+      } else if (msg.type === 'segment-result') {
+        const p = this._pendingSegments.get(msg.reqId);
+        if (p) {
+          this._pendingSegments.delete(msg.reqId);
+          p.resolve({
+            masks: msg.masks,
+            count: msg.count,
+            width: msg.width,
+            height: msg.height,
+            tiles: msg.tiles.map((t) => ({ ...t, flows_cellprob: new Float32Array(0) })),
+            resizedWidth: msg.resizedWidth,
+            resizedHeight: msg.resizedHeight,
+            scale: msg.scale,
+            totalMs: performance.now() - p.t0,
+            postprocessMs: msg.postprocessMs,
+          });
+        }
+      } else if (msg.type === 'segment-error') {
+        const p = this._pendingSegments.get(msg.reqId);
+        if (p) {
+          this._pendingSegments.delete(msg.reqId);
+          p.reject(new Error(msg.message));
+        }
       } else if (msg.type === 'status') {
         opts.onStatus?.(msg.status);
       }
@@ -199,8 +231,7 @@ export class Cellpose {
       if (!initSettled) {
         rejectInit(new Error(`worker module failed to load: ${detail}`));
       }
-      for (const p of this._pending.values()) p.reject(new Error(detail));
-      this._pending.clear();
+      this._rejectAllPending(new Error(detail));
     });
     // messageerror fires when structured-clone deserialization fails on a
     // message *received* by the worker (the failure is reported on the main
@@ -208,8 +239,7 @@ export class Cellpose {
     worker.addEventListener('messageerror', () => {
       const err = new Error('worker received malformed message (structured-clone failure)');
       if (!initSettled) rejectInit(err);
-      for (const p of this._pending.values()) p.reject(err);
-      this._pending.clear();
+      this._rejectAllPending(err);
     });
 
     this._workerReady = new Promise<void>((resolve, reject) => {
@@ -278,35 +308,25 @@ export class Cellpose {
     return this._workerReady;
   }
 
-  /** Aborts the worker mid-run; pending tile promises reject with AbortError. */
+  /** Reject every in-flight tile + segment promise (worker died/errored). */
+  private _rejectAllPending(err: Error): void {
+    for (const p of this._pending.values()) p.reject(err);
+    this._pending.clear();
+    for (const p of this._pendingSegments.values()) p.reject(err);
+    this._pendingSegments.clear();
+  }
+
+  /** Aborts the worker mid-run; pending promises reject with AbortError. */
   private _abort(reason?: string): void {
     if (!this._worker) return;
     this._worker.terminate();
     this._worker = null;
     this._workerReady = null;
-    const err = new DOMException(reason ?? 'Operation aborted', 'AbortError');
-    for (const p of this._pending.values()) p.reject(err);
-    this._pending.clear();
-  }
-
-  private async _runTile(
-    tile: Float32Array,
-    bsize: number,
-  ): Promise<Extract<WorkerToMain, { type: 'tile-result' }>> {
-    await this._ensureWorker();
-    const worker = this._worker;
-    if (!worker) throw new Error('worker not available');
-    const tileId = this._nextTileId++;
-    return new Promise<Extract<WorkerToMain, { type: 'tile-result' }>>((resolve, reject) => {
-      this._pending.set(tileId, { resolve, reject });
-      const msg: MainToWorker = { type: 'run-tile', tileId, tile, bsize };
-      worker.postMessage(msg, [tile.buffer]);
-    });
+    this._rejectAllPending(new DOMException(reason ?? 'Operation aborted', 'AbortError'));
   }
 
   async segment(input: SegmentInput, opts: SegmentOptions = {}): Promise<SegmentOutput> {
     const t0 = performance.now();
-    const tileSize = opts.tile ?? 256;
     const signal = opts.signal;
 
     // Hook abort: terminate the worker, surface AbortError to the caller.
@@ -319,96 +339,36 @@ export class Cellpose {
     }
 
     try {
-      let chw = buildCpsamChannels(input.data, input.width, input.height, input.channels, opts);
-      let w = input.width,
-        h = input.height,
-        scale = 1;
-      // Match cellpose's order: normalize FIRST, then resize. (See
-      // models.py:_run_net: `transforms.normalize_img(x)` then
-      // `transforms.resize_image(imgi[b], rsz=rsz)`.) Resizing first would
-      // change the per-channel percentile statistics that drive normalization.
-      chw = normalizePerChannel(chw, 3, w * h, opts.normalize ?? {});
-      if (opts.diameter !== undefined) {
-        const r = diameterResize(chw, w, h, { channels: 3, diameter: opts.diameter });
-        chw = r.data;
-        w = r.width;
-        h = r.height;
-        scale = r.scale;
-      }
+      await this._ensureWorker();
+      const worker = this._worker;
+      if (!worker) throw new Error('worker not available');
 
-      const tileOpts: { bsize: number; overlap?: number } = { bsize: tileSize };
-      if (opts.overlap !== undefined) tileOpts.overlap = opts.overlap;
-      const tiles: TileRecord[] = makeTiles(chw, w, h, 3, tileOpts);
+      // Strip the non-serializable opts (AbortSignal + callbacks); the rest is
+      // structured-cloned to the worker.
+      const { signal: _omitSignal, onTileProgress, ...rest } = opts;
+      void _omitSignal;
+      const workerOpts = rest as WorkerSegmentOptions;
+      const reqId = this._nextReqId++;
 
-      const out: SegmentTileOutput[] = [];
-      for (let i = 0; i < tiles.length; i++) {
-        const t = tiles[i]!;
-        const r = await this._runTile(t.tile, tileSize);
-        out.push({
-          flows_cellprob: r.flowsCellprob,
-          tx: t.tx,
-          ty: t.ty,
-          bsize: tileSize,
-          inferenceMs: r.inferenceMs,
-        });
-        opts.onTileProgress?.(i + 1, tiles.length);
-      }
-
-      // Average overlapping tile predictions into a single full-image tensor,
-      // then run dynamics once. See average_tiles.ts header for why this is the
-      // right algorithm choice (vs per-tile dynamics + label stitching).
-      const tPost = performance.now();
-      const averaged = averageTiles(
-        out.map((o) => ({ flowsCellprob: o.flows_cellprob, tx: o.tx, ty: o.ty, bsize: o.bsize })),
-        h,
-        w,
-      );
-      const hwFull = h * w;
-      const dPFull = averaged.data.subarray(0, 2 * hwFull) as Float32Array;
-      const cpFull = averaged.data.subarray(2 * hwFull, 3 * hwFull) as Float32Array;
-      // Match cellpose's niter scaling: `niter = int(200 / image_scaling)`
-      // where image_scaling = 30 / diameter (== JS's `scale`). Upscaled images
-      // need fewer iterations (each step covers more source pixels) and
-      // downscaled images need more. Honors any explicit user override.
-      const dynOpts: ComputeMasksOptions = { ...(opts.dynamics ?? {}) };
-      if (dynOpts.niter === undefined && opts.diameter !== undefined && scale !== 1) {
-        dynOpts.niter = Math.max(1, Math.floor(200 / scale));
-      }
-      const m = computeMasks(dPFull, cpFull, h, w, dynOpts);
-
-      // Inverse-resize labels back to source resolution if a diameter resize
-      // was applied (nearest-neighbor — labels must not be interpolated).
-      let masksSrc = m.masks;
-      let outW = w,
-        outH = h;
-      if (scale !== 1) {
-        outW = input.width;
-        outH = input.height;
-        const resized = new Uint32Array(outW * outH);
-        for (let yy = 0; yy < outH; yy++) {
-          const sy = Math.min(h - 1, Math.max(0, Math.round(yy * scale)));
-          const srcRow = sy * w;
-          const dstRow = yy * outW;
-          for (let xx = 0; xx < outW; xx++) {
-            const sx = Math.min(w - 1, Math.max(0, Math.round(xx * scale)));
-            resized[dstRow + xx] = m.masks[srcRow + sx] as number;
-          }
-        }
-        masksSrc = resized;
-      }
-      const postprocessMs = performance.now() - tPost;
-      return {
-        masks: masksSrc,
-        count: m.count,
-        width: outW,
-        height: outH,
-        tiles: out,
-        resizedWidth: w,
-        resizedHeight: h,
-        scale,
-        totalMs: performance.now() - t0,
-        postprocessMs,
-      };
+      return await new Promise<SegmentOutput>((resolve, reject) => {
+        const pending: PendingSegment = { resolve, reject, t0 };
+        if (onTileProgress) pending.onTileProgress = onTileProgress;
+        this._pendingSegments.set(reqId, pending);
+        const msg: MainToWorker = {
+          type: 'segment',
+          reqId,
+          image: {
+            data: input.data,
+            width: input.width,
+            height: input.height,
+            channels: input.channels,
+          },
+          opts: workerOpts,
+        };
+        // image.data is cloned (left intact for the caller); the result masks
+        // are transferred back from the worker.
+        worker.postMessage(msg);
+      });
     } finally {
       if (signal && abortListener) signal.removeEventListener('abort', abortListener);
     }
@@ -421,5 +381,6 @@ export class Cellpose {
     this._worker = null;
     this._workerReady = null;
     this._pending.clear();
+    this._pendingSegments.clear();
   }
 }

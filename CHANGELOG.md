@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] — 2026-07-22
 
 ### Fixed
 
@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   5-channel image can use `chan = 4` to select channel 3. Backward compatible:
   existing `0`–`3` values behave identically (except `chan = 0`, per the fix
   above). Non-integer or out-of-range indices now throw.
+
+### Removed
+
+- **`SegmentMilestone1Output`** (deprecated in earlier releases). The type was a
+  leftover from the step-by-step build and is no longer returned by any API —
+  `segment()` returns `SegmentOutput`. Removed from the public exports.
 
 ## [0.3.0] — 2026-06-14
 
@@ -142,6 +148,8 @@ label maps. See [`docs/PLAN.md`](./docs/PLAN.md) for the full milestone trail
 and [`docs/STAGE0-RESULTS.md`](./docs/STAGE0-RESULTS.md) for parity / latency
 measurements.
 
+[0.4.0]: https://github.com/belkassaby/Cellpose.js/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/belkassaby/Cellpose.js/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/belkassaby/Cellpose.js/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/belkassaby/Cellpose.js/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/belkassaby/Cellpose.js/releases/tag/v0.1.0

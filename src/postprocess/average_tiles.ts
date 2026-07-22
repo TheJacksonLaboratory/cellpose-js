@@ -12,8 +12,6 @@
  *   produces smoother boundaries because the taper window down-weights the
  *   noisier edges of each tile's prediction.
  *
- *   See CELLPOSE-JS-MILESTONE5-RESULTS.md (when written) for the full analysis.
- *
  * Algorithm:
  *   1. Build a (B, B) taper mask: 2D outer product of a 1D sigmoid window
  *      that's ≈ 1 in the center and ≈ 0 in the last ~20 pixels of each edge.

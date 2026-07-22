@@ -2,8 +2,7 @@
  * Public Cellpose API. The full segmentation pipeline (preprocess → tile →
  * inference → average → dynamics → inverse-resize) runs in a Web Worker via the
  * `segment` message, so nothing heavy runs on the UI thread. AbortSignal-driven
- * cancellation and tile-level progress are supported. The legacy per-tile
- * `_runTile` path is retained for back-compat.
+ * cancellation and tile-level progress are supported.
  */
 import { assertSupportedEnvironment, describeAdapter } from './env.js';
 import { fetchModel, type FetchProgress } from './model-cache.js';
@@ -78,14 +77,6 @@ export interface SegmentOutput {
   totalMs: number;
   /** Wall-clock ms in the average+dynamics step (excludes per-tile inference). */
   postprocessMs: number;
-}
-
-/** @deprecated kept for legacy demo; use `segment()`. */
-export interface SegmentMilestone1Output {
-  flows_cellprob: Float32Array;
-  height: number;
-  width: number;
-  inferenceMs: number;
 }
 
 interface PendingTile {

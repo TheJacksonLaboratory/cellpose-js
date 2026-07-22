@@ -1,6 +1,6 @@
 {
   "name": "cellpose-js",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Browser-side cellular segmentation via Cellpose-SAM, running on WebGPU.",
   "type": "module",
   "license": "MIT",

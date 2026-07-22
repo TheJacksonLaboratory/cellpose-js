@@ -60,7 +60,7 @@ const result = await cp.segment(
   { data: imageData.data, width: imageData.width, height: imageData.height, channels: 4 },
   {
     diameter: 30, // estimated cell diameter in source pixels (omit for native resolution)
-    chan: 0, // primary channel (0 = grayscale)
+    chan: 0, // primary channel (0 = grayscale = mean of color channels)
     chan2: 0, // secondary channel (0 = none)
     dynamics: { cellprobThreshold: 0 }, // pixels above this enter the dynamical system
     onTileProgress: (done, total) => console.log(`tile ${done}/${total}`),
@@ -80,14 +80,22 @@ console.log(`Found ${result.count} cells.`);
 
 ### `chan` / `chan2`
 
-CPSAM was trained with channel-shuffling augmentation, so the choice rarely matters for segmentation quality. The legacy Cellpose 1–3 semantics are preserved:
+CPSAM was trained with channel-shuffling augmentation, so the cyto-vs-nuclei _assignment_ rarely matters — but you still need to point it at the channel(s) that actually carry signal.
 
-| Image type                                 | `chan` | `chan2` |
-| ------------------------------------------ | ------ | ------- |
-| H&E histology, brightfield, phase contrast | `0`    | `0`     |
-| Fluorescence: green cyto, blue nuclei      | `2`    | `3`     |
-| Fluorescence: red cyto, green nuclei       | `1`    | `2`     |
-| First run / unknown                        | `0`    | `0`     |
+- **`chan = 0`** — grayscale: the **mean** of the source's color channels (alpha is excluded for RGBA input, i.e. `channels === 4`). Mirrors `cellpose.transforms` (`data.mean(axis=-1)`). Use for brightfield / H&E / phase, or any RGB image whose signal is really one thing shown in color.
+- **`chan = 1 | 2 | 3`** — pick red / green / blue directly, no averaging.
+- **`chan = k` (k ≥ 1)** — selects source channel `k − 1` (0-based), for _any_ channel count. A 5-channel microscopy stack can use `chan = 4` to pick channel 3.
+- **`chan2`** — same indexing for the secondary (nuclear) channel; `0` = none.
+
+> **Multichannel images:** each channel is usually distinct biology (e.g. DAPI vs. GFP), so **never use `chan = 0`** on them — averaging different markers is meaningless. Select the channel you want with `chan`/`chan2 ≥ 1` instead (which never averages). CPSAM only ever consumes a 3-channel `[primary, secondary, 0]` input, so reducing a stack to "which channel is cytoplasm, which is nucleus" is required regardless.
+
+| Image type                                             | `chan` | `chan2` |
+| ------------------------------------------------------ | ------ | ------- |
+| H&E histology, brightfield, phase contrast             | `0`    | `0`     |
+| Fluorescence: green cyto, blue nuclei                  | `2`    | `3`     |
+| Fluorescence: red cyto, green nuclei                   | `1`    | `2`     |
+| Multichannel stack: cyto = ch3, nuclei = ch0 (0-based) | `4`    | `1`     |
+| First run / unknown (single-signal image)              | `0`    | `0`     |
 
 ### `diameter`
 
@@ -145,13 +153,13 @@ The demo at `examples/demo/` is a complete client that exercises the full pipeli
 
 ## Troubleshooting
 
-| Symptom                                                                              | Cause                               | Fix                                                                             |
-| ------------------------------------------------------------------------------------ | ----------------------------------- | ------------------------------------------------------------------------------- |
-| `e.getValue is not a function` at session-create                                     | Wrong ORT entry point               | Import from `onnxruntime-web/webgpu`, not `onnxruntime-web`.                    |
-| `Failed to fetch dynamically imported module: …/ort-wasm-simd-threaded.asyncify.mjs` | Cross-origin dynamic import blocked | Serve ORT WASM files same-origin (or proxy). See `configureOrt({ wasmPaths })`. |
-| `Float16Array is not defined`                                                        | Browser too old                     | Chrome ≥135, Safari ≥17.4. No earlier polyfill is supported.                    |
-| `Operation aborted` after AbortSignal fires                                          | Working as intended                 | Worker terminates; next `segment()` call respawns from IDB cache (~150 ms).     |
-| Mask overlay has split cells at tile borders                                         | Tile stitching off                  | Bug — file an issue. (M5 averaging should eliminate this.)                      |
+| Symptom                                                                              | Cause                               | Fix                                                                              |
+| ------------------------------------------------------------------------------------ | ----------------------------------- | -------------------------------------------------------------------------------- |
+| `e.getValue is not a function` at session-create                                     | Wrong ORT entry point               | Import from `onnxruntime-web/webgpu`, not `onnxruntime-web`.                     |
+| `Failed to fetch dynamically imported module: …/ort-wasm-simd-threaded.asyncify.mjs` | Cross-origin dynamic import blocked | Serve ORT WASM files same-origin (or proxy). See `configureOrt({ wasmPaths })`.  |
+| `Float16Array is not defined`                                                        | Browser too old                     | Chrome ≥135, Safari ≥17.4. No earlier polyfill is supported.                     |
+| `Operation aborted` after AbortSignal fires                                          | Working as intended                 | Worker terminates; next `segment()` call respawns from IDB cache (~150 ms).      |
+| Mask overlay has split cells at tile borders                                         | Tile-averaging regression           | Shouldn't happen — tile averaging stitches across borders. Please file an issue. |
 
 ## Credits
 

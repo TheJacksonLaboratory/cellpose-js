@@ -80,7 +80,9 @@ function drawMaskOverlay(
   w: number,
   h: number,
   baseRgba: Uint8ClampedArray | null = null,
+  alpha = 0.5,
 ): void {
+  alpha = Math.max(0, Math.min(1, alpha)); // keep the blend well-defined regardless of caller
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d')!;
@@ -126,41 +128,23 @@ function drawMaskOverlay(
       out[i * 4 + 3] = 255;
     } else {
       const [r, g, b] = colorFor(l);
-      out[i * 4] = r;
-      out[i * 4 + 1] = g;
-      out[i * 4 + 2] = b;
+      if (baseRgba) {
+        // Alpha-blend the mask tint over the input so the fibers show through:
+        // out = base*(1-alpha) + color*alpha.
+        const inv = 1 - alpha;
+        out[i * 4] = baseRgba[i * 4]! * inv + r * alpha;
+        out[i * 4 + 1] = baseRgba[i * 4 + 1]! * inv + g * alpha;
+        out[i * 4 + 2] = baseRgba[i * 4 + 2]! * inv + b * alpha;
+      } else {
+        // No base image (full-image panel): solid mask colors.
+        out[i * 4] = r;
+        out[i * 4 + 1] = g;
+        out[i * 4 + 2] = b;
+      }
       out[i * 4 + 3] = 255;
     }
   }
   ctx.putImageData(new ImageData(out, w, h), 0, 0);
-}
-
-function drawHeatmap(canvas: HTMLCanvasElement, data: Float32Array, w: number, h: number): void {
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-  // Auto-range to data min/max for display
-  let mn = Infinity,
-    mx = -Infinity;
-  for (let i = 0; i < data.length; i++) {
-    const v = data[i]!;
-    if (Number.isFinite(v)) {
-      if (v < mn) mn = v;
-      if (v > mx) mx = v;
-    }
-  }
-  const span = mx - mn || 1;
-  const rgba = new Uint8ClampedArray(w * h * 4);
-  for (let i = 0; i < w * h; i++) {
-    const t = ((data[i] as number) - mn) / span; // [0,1]
-    const u8 = Math.max(0, Math.min(255, Math.round(t * 255)));
-    // Simple turbo-ish: cool→warm via (255-u8, u8/2, u8) — readable enough for diagnostics.
-    rgba[i * 4] = 255 - u8;
-    rgba[i * 4 + 1] = Math.round(u8 / 2);
-    rgba[i * 4 + 2] = u8;
-    rgba[i * 4 + 3] = 255;
-  }
-  ctx.putImageData(new ImageData(rgba, w, h), 0, 0);
 }
 
 async function loadImageFile(file: File): Promise<SegmentInput> {
@@ -229,8 +213,13 @@ async function run() {
     const diameterStr = ($('diameter') as HTMLInputElement).value.trim();
     const opts: Parameters<Cellpose['segment']>[1] = {
       tile: parseInt($('tile').value, 10),
-      chan: parseInt($('chan').value, 10) as 0 | 1 | 2 | 3,
-      chan2: parseInt($('chan2').value, 10) as 0 | 1 | 2 | 3,
+      // chan=0 → grayscale (mean of color channels); chan>=1 selects source
+      // channel chan-1 (0-based), so any N-channel image can pick a marker.
+      // Number() (not parseInt): a fractional entry surfaces the "non-integer"
+      // error from buildCpsamChannels instead of being silently truncated, and
+      // an empty field falls back to 0 (grayscale) rather than NaN.
+      chan: Number($('chan').value),
+      chan2: Number($('chan2').value),
     };
     if (diameterStr) opts.diameter = parseFloat(diameterStr);
 
@@ -251,18 +240,26 @@ async function run() {
     const median = infTimes[Math.floor(infTimes.length / 2)] ?? 0;
     log(`per-tile inference median: ${fmt(median)}  total: ${fmt(r.totalMs)}`);
 
-    // Full-image mask overlay (M5 returns a single stitched label map).
+    // Full-image mask overlay (single stitched label map, source resolution).
     drawMaskOverlay($('masksFullCanvas') as HTMLCanvasElement, r.masks, r.width, r.height);
-    // Diagnostic: cellprob heatmap from tile 0 (mostly for debugging when masks look wrong).
-    const t0 = r.tiles[0]!;
-    const B = t0.bsize;
-    const hw = B * B;
-    drawHeatmap(
-      $('cellprobCanvas') as HTMLCanvasElement,
-      t0.flows_cellprob.subarray(2 * hw, 3 * hw),
-      B,
-      B,
-    );
+    // Diagnostic: masks drawn over the input so you can eyeball fit. Flow/cellprob
+    // tensors intentionally stay in the worker (returning them defeats the
+    // offload — see SegmentOutput.tiles docs), so we can't heatmap them here.
+    // Overlay only when the input is same-size RGBA (always true for canvas input).
+    if (
+      currentImage.width === r.width &&
+      currentImage.height === r.height &&
+      currentImage.channels === 4 &&
+      currentImage.data instanceof Uint8ClampedArray
+    ) {
+      drawMaskOverlay(
+        $('cellprobCanvas') as HTMLCanvasElement,
+        r.masks,
+        r.width,
+        r.height,
+        currentImage.data,
+      );
+    }
     log(`masks (stitched, full image): ${r.count}`);
     log(`postprocess (average + dynamics): ${r.postprocessMs.toFixed(0)} ms`);
     log('GATE: PASS (full pipeline: preprocess + per-tile inference + average + dynamics)', 'pass');

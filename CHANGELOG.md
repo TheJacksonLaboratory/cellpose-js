@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`buildCpsamChannels` now validates the channel count.** A non-positive or
+  non-integer `channels` argument (e.g. `channels = 0`) previously slipped past
+  the length check and made the `chan = 0` grayscale mean divide by zero,
+  silently producing `NaN`s. It now throws a clear error.
+
+## [0.4.0] — 2026-07-22
+
+### Fixed
+
+- **Grayscale (`chan = 0`) now averages the color channels** instead of taking
+  only source channel 0 (red). The old behavior blanked any image whose signal
+  wasn't in the red channel: a green- or blue-dominant fluorescence image
+  normalized to all-zeros and produced **empty masks**. `chan = 0` now computes
+  the mean across color channels — with alpha excluded for RGBA input
+  (`channels === 4`) so a fully-opaque image isn't dragged toward 255 — matching
+  `cellpose.transforms` (`data.mean(axis=-1)` for `channels=[0, 0]`).
+- **Demo "cellprob" panel rendered all-black.** It heatmapped
+  `tiles[0].flows_cellprob`, which has been an empty `Float32Array` since 0.3.0
+  moved the pipeline into the worker. Replaced with a "masks over input" overlay
+  built from the returned label map, and removed the dead heatmap code.
+
+### Changed
+
+- **`chan` / `chan2` widened from `0 | 1 | 2 | 3` to `number`.** Values ≥ 1
+  select source channel `chan − 1` (0-based), so true multichannel microscopy
+  stacks (> 3 channels) can pick a specific marker without averaging — e.g. a
+  5-channel image can use `chan = 4` to select channel 3. Backward compatible:
+  existing `0`–`3` values behave identically (except `chan = 0`, per the fix
+  above). Non-integer or out-of-range indices now throw.
+
+### Removed
+
+- **`SegmentMilestone1Output`** (deprecated in earlier releases). The type was a
+  leftover from the step-by-step build and is no longer returned by any API —
+  `segment()` returns `SegmentOutput`. Removed from the public exports.
+
 ## [0.3.0] — 2026-06-14
 
 ### Changed
@@ -117,6 +157,8 @@ label maps. See [`docs/PLAN.md`](./docs/PLAN.md) for the full milestone trail
 and [`docs/STAGE0-RESULTS.md`](./docs/STAGE0-RESULTS.md) for parity / latency
 measurements.
 
+[0.4.0]: https://github.com/belkassaby/Cellpose.js/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/belkassaby/Cellpose.js/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/belkassaby/Cellpose.js/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/belkassaby/Cellpose.js/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/belkassaby/Cellpose.js/releases/tag/v0.1.0

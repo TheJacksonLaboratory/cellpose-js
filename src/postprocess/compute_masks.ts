@@ -3,8 +3,8 @@
  * by 1/5 (matches cellpose convention), runs Euler integration, then clusters.
  *
  * Mirrors cellpose.dynamics.compute_masks for the 2D path, minus the
- * (optional) flow-consistency filter (M4 follow-up) and hole-fill / min-size
- * cleanup (M4 follow-up).
+ * (optional) flow-consistency filter and hole-fill / min-size cleanup, which
+ * are not yet implemented.
  */
 import { followFlows } from './follow_flows.js';
 import { getMasks, type GetMasksResult } from './get_masks.js';

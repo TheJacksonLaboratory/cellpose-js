@@ -82,6 +82,7 @@ function drawMaskOverlay(
   baseRgba: Uint8ClampedArray | null = null,
   alpha = 0.5,
 ): void {
+  alpha = Math.max(0, Math.min(1, alpha)); // keep the blend well-defined regardless of caller
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d')!;
@@ -214,8 +215,11 @@ async function run() {
       tile: parseInt($('tile').value, 10),
       // chan=0 → grayscale (mean of color channels); chan>=1 selects source
       // channel chan-1 (0-based), so any N-channel image can pick a marker.
-      chan: parseInt($('chan').value, 10),
-      chan2: parseInt($('chan2').value, 10),
+      // Number() (not parseInt): a fractional entry surfaces the "non-integer"
+      // error from buildCpsamChannels instead of being silently truncated, and
+      // an empty field falls back to 0 (grayscale) rather than NaN.
+      chan: Number($('chan').value),
+      chan2: Number($('chan2').value),
     };
     if (diameterStr) opts.diameter = parseFloat(diameterStr);
 

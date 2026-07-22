@@ -62,6 +62,9 @@ export function buildCpsamChannels(
   opts: ChannelMapOptions = {},
 ): Float32Array {
   const { chan = 0, chan2 = 0 } = opts;
+  if (!Number.isInteger(channels) || channels < 1) {
+    throw new Error(`buildCpsamChannels: channels must be a positive integer, got ${channels}`);
+  }
   const hw = width * height;
   if (src.length !== hw * channels) {
     throw new Error(

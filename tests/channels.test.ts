@@ -116,4 +116,12 @@ describe('buildCpsamChannels', () => {
     const src = new Uint8Array([10, 11, 12, 255]); // 1px RGBA
     expect(() => buildCpsamChannels(src, 1, 1, 4, { chan: 1.5 })).toThrow(/non-negative integer/);
   });
+
+  it('throws on a non-positive channel count (avoids a divide-by-zero → NaN)', () => {
+    // channels=0 would otherwise slip past the length check (0 === 0) and make
+    // the grayscale mean divide by zero, silently yielding NaNs.
+    expect(() => buildCpsamChannels(new Uint8Array(0), 2, 2, 0)).toThrow(
+      /channels must be a positive integer/,
+    );
+  });
 });

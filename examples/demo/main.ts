@@ -211,16 +211,21 @@ async function run() {
     log(`adapter: vendor=${adapter?.vendor} arch=${adapter?.architecture}`);
 
     const diameterStr = ($('diameter') as HTMLInputElement).value.trim();
+    const chanStr = ($('chan') as HTMLInputElement).value.trim();
+    const chan2Str = ($('chan2') as HTMLInputElement).value.trim();
     const opts: Parameters<Cellpose['segment']>[1] = {
       tile: parseInt($('tile').value, 10),
-      // chan=0 → grayscale (mean of color channels); chan>=1 selects source
-      // channel chan-1 (0-based), so any N-channel image can pick a marker.
-      // Number() (not parseInt): a fractional entry surfaces the "non-integer"
-      // error from buildCpsamChannels instead of being silently truncated, and
-      // an empty field falls back to 0 (grayscale) rather than NaN.
-      chan: Number($('chan').value),
-      chan2: Number($('chan2').value),
+      resample: ($('resample') as HTMLInputElement).checked,
     };
+    // Leaving both chan fields blank keeps the passthrough default (the first
+    // up-to-3 source channels each become their own normalized network
+    // channel). Filling either one switches to legacy selection: chan=0 →
+    // grayscale (mean of color channels); chan>=1 selects source channel
+    // chan-1 (0-based), so any N-channel image can pick a marker.
+    // Number() (not parseInt): a fractional entry surfaces the "non-integer"
+    // error from buildCpsamChannels instead of being silently truncated.
+    if (chanStr) opts.chan = Number(chanStr);
+    if (chan2Str) opts.chan2 = Number(chan2Str);
     if (diameterStr) opts.diameter = parseFloat(diameterStr);
 
     opts.signal = activeAbort.signal;
@@ -230,7 +235,9 @@ async function run() {
       ($('progress') as HTMLSpanElement).textContent = `tile ${done}/${total}`;
     };
     log(
-      `segment(${currentImage.width}x${currentImage.height}, opts.tile=${opts.tile}, chan=${opts.chan}, chan2=${opts.chan2}, diameter=${opts.diameter ?? 'auto'})...`,
+      `segment(${currentImage.width}x${currentImage.height}, opts.tile=${opts.tile}, ` +
+        `chan=${opts.chan ?? 'passthrough'}, chan2=${opts.chan2 ?? 'passthrough'}, ` +
+        `diameter=${opts.diameter ?? 'auto'}, resample=${opts.resample})...`,
     );
     const r = await model.segment(currentImage, opts);
     log(

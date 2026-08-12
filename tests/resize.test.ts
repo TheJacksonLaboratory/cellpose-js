@@ -12,7 +12,81 @@
  *   - scale return value matches Python's image_scaling = 30 / diameter.
  */
 import { describe, it, expect } from 'vitest';
-import { diameterResize } from '../src/preprocess/resize.js';
+import { diameterResize, resizeChw } from '../src/preprocess/resize.js';
+
+describe('resizeChw (used by the resample path to upsample flows)', () => {
+  it('identity: same dst size returns the same values', () => {
+    const W = 4,
+      H = 4;
+    const chw = new Float32Array(3 * H * W);
+    for (let i = 0; i < chw.length; i++) chw[i] = i;
+    const out = resizeChw(chw, 3, W, H, W, H);
+    for (let i = 0; i < chw.length; i++) expect(out[i]).toBeCloseTo(chw[i] as number, 5);
+  });
+
+  it('matches diameterResize channel-for-channel on the same target size', () => {
+    const W = 16,
+      H = 16;
+    const chw = new Float32Array(3 * H * W);
+    for (let i = 0; i < chw.length; i++) chw[i] = Math.sin(i * 0.37);
+    // diameter=60 → scale 0.5 → 8x8.
+    const viaDiameter = diameterResize(chw, W, H, { channels: 3, diameter: 60 });
+    const direct = resizeChw(chw, 3, W, H, viaDiameter.width, viaDiameter.height);
+    expect(direct.length).toBe(viaDiameter.data.length);
+    for (let i = 0; i < direct.length; i++) {
+      expect(direct[i]).toBeCloseTo(viaDiameter.data[i] as number, 6);
+    }
+  });
+
+  it('upsamples a 3-plane flow+cellprob stack without cross-channel bleed', () => {
+    // 3 planes (dPy, dPx, cellprob), each constant and distinct. Bilinear
+    // interpolation of a constant plane must stay that constant everywhere.
+    const W = 4,
+      H = 4;
+    const chw = new Float32Array(3 * H * W);
+    chw.fill(-2, 0, H * W);
+    chw.fill(5, H * W, 2 * H * W);
+    chw.fill(0.75, 2 * H * W, 3 * H * W);
+    const out = resizeChw(chw, 3, W, H, 8, 8);
+    expect(out.length).toBe(3 * 64);
+    for (let i = 0; i < 64; i++) expect(out[i]).toBeCloseTo(-2, 5);
+    for (let i = 64; i < 128; i++) expect(out[i]).toBeCloseTo(5, 5);
+    for (let i = 128; i < 192; i++) expect(out[i]).toBeCloseTo(0.75, 5);
+  });
+
+  it('throws when the input length does not match channels * srcW * srcH', () => {
+    expect(() => resizeChw(new Float32Array(10), 3, 4, 4, 8, 8)).toThrow(/expected 48 floats/);
+  });
+
+  it('rejects non-positive dimensions before they can produce NaN output', () => {
+    // srcW=0 makes hwIn 0, so an empty buffer satisfies the length check; the
+    // interpolation would then read past the end of `src` and emit NaN.
+    expect(() => resizeChw(new Float32Array(0), 1, 0, 5, 8, 8)).toThrow(
+      /srcW must be a positive integer/,
+    );
+    expect(() => resizeChw(new Float32Array(16), 1, 4, 4, 0, 8)).toThrow(
+      /dstW must be a positive integer/,
+    );
+    expect(() => resizeChw(new Float32Array(16), 0, 4, 4, 8, 8)).toThrow(
+      /channels must be a positive integer/,
+    );
+  });
+
+  it('rejects fractional dimensions (would silently truncate the write loops)', () => {
+    expect(() => resizeChw(new Float32Array(16), 1, 4, 4, 8.5, 8)).toThrow(
+      /dstW must be a positive integer/,
+    );
+    expect(() => resizeChw(new Float32Array(16), 1, 4, 4, 8, 2.5)).toThrow(
+      /dstH must be a positive integer/,
+    );
+  });
+
+  it('never emits NaN for a valid 1-pixel source (guard boundary)', () => {
+    const out = resizeChw(new Float32Array([7]), 1, 1, 1, 4, 4);
+    expect(out.length).toBe(16);
+    for (const v of out) expect(v).toBe(7);
+  });
+});
 
 describe('diameterResize bilinear (pure JS)', () => {
   it('identity: srcSize == dstSize → values bit-exact match input', () => {

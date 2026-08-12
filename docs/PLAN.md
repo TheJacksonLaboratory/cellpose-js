@@ -339,6 +339,33 @@ Touchpoints in this repo:
 
 ---
 
+## 7. Upstream re-sync log
+
+The port tracks a moving target. Each entry records the upstream commit reviewed and what came out of it.
+
+### 2026-08-12 — upstream `main` @ `a54cb48` (2026-06-14)
+
+Previous baseline: the 2026-05-22 parity review (upstream `571d2f4`). Diffed `transforms.py`, `dynamics.py`, `models.py`, `core.py`, and `vit_sam.py` → `vit.py` across that window.
+
+**Acted on:**
+
+1. **Channel passthrough became the default.** Upstream's `convert_image` stopped zero-padding to 3 channels; `CPSAM.forward` now slices the patch-embed conv weights instead (`F.conv2d(x, W[:, :x.shape[1]], …)`). Those two are mathematically equivalent — conv against zero channels contributes nothing — so the ONNX graph needed no change. What it exposed is that upstream v4 does **no channel selection at all**, and `channels=` now logs an explicit deprecation. Cellpose.js's `chan = 0` default (grayscale mean) was diverging on the default path, so passthrough is now the default with `chan`/`chan2` kept as opt-in. Behavior change for every caller on defaults.
+
+2. **`niter` scaling gated on `resample`.** Upstream changed `niter_scale = 1 if image_scaling is None else image_scaling` to `niter_scale = 1 if rescale is None or not resample else rescale`. That surfaced a real bug: `segment()` ran dynamics at network resolution (i.e. `resample=False` geometry) while scaling `niter` as if it ran at source resolution. Fixed, and `resample: true` added as the opt-in upstream-default path.
+
+3. **`bsize` restriction made explicit.** Upstream now raises for `bsize != 256` on cpsam; we now reject `tile !== 256` with a clear message instead of failing opaquely inside ORT.
+
+**Reviewed, no action:**
+
+- `normalize99` unchanged; `normalizePerChannel`'s `range > 1e-3 → else zeros` still matches `np.ptp(...) > 0` + the `cgood` zeroing pass.
+- `invert` moved out of `eval()` into the normalize dict — already where we had it (`NormalizeOptions`).
+- `compute_masks` downcasts labels to `uint16` below 65,536 masks. Not adopted: changing `SegmentOutput.masks` from `Uint32Array` would break consumers for a memory win.
+- 3D (`resize_image_3d`, `stitch3D` overflow, ortho views), `random_rotate_and_resize` (training, now torch-device), GUI, `io.py`, `denoise.py` — all out of scope.
+
+**Model zoo (documented, not implemented):** upstream's default is now `cpsam_v2`, with `cpdino` / `cpdino-vitb` added. `cpsam_v2` is architecturally identical to `cpsam` — `models.get_backbone()` finds no `encoder.cls_token` in the checkpoint and returns `"sam_vitl"`, instantiating the same `CPSAM` class at `ps=8` / `bsize=256` / `nout=3` — so the Stage-0 FP16 export recipe applies unchanged and only the weights differ. Publishing a `cpsam_v2_fp16.onnx` requires no library change; `fromPretrained()` already takes an arbitrary URL. `cpdino` is DINOv3 at `bsize` 384 and would be a separate port.
+
+---
+
 ## 8. Sources
 
 ### Phase 1 shipping artifacts (added 2026-05-15, refreshed at v0.1.1)

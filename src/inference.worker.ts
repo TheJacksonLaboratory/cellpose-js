@@ -24,6 +24,7 @@ import {
   buildCpsamChannels,
   normalizePerChannel,
   diameterResize,
+  resizeChw,
   makeTiles,
   type TileRecord,
 } from './preprocess/index.js';
@@ -133,6 +134,18 @@ async function handleSegment(msg: Extract<MainToWorker, { type: 'segment' }>): P
   }
   const { reqId, image, opts } = msg;
   const tileSize = opts.tile ?? 256;
+  // CPSAM's position embeddings are baked in at 256/8 = 32x32 tokens, and the
+  // ONNX export hardcodes H/W to 256, so any other tile size fails deep inside
+  // ORT with an opaque shape error. Upstream raises the same restriction
+  // explicitly ("bsize != 256 is not supported for cpsam").
+  if (tileSize !== 256) {
+    postReply({
+      type: 'segment-error',
+      reqId,
+      message: `tile must be 256 for CPSAM (position embeddings and the ONNX export are fixed at 256), got ${tileSize}`,
+    });
+    return;
+  }
 
   // Preprocess: channels -> normalize -> (optional) diameter resize.
   let chw = buildCpsamChannels(image.data, image.width, image.height, image.channels, opts);
@@ -171,30 +184,54 @@ async function handleSegment(msg: Extract<MainToWorker, { type: 'segment' }>): P
   // Average overlapping tile predictions, then run dynamics once.
   postReply({ type: 'segment-progress', reqId, phase: 'dynamics', done: 0, total: 1 });
   const tPost = performance.now();
-  const averaged = averageTiles(flows, h, w);
-  const hwFull = h * w;
-  const dPFull = averaged.data.subarray(0, 2 * hwFull) as Float32Array;
-  const cpFull = averaged.data.subarray(2 * hwFull, 3 * hwFull) as Float32Array;
-  const dynOpts: ComputeMasksOptions = { ...(opts.dynamics ?? {}) };
-  if (dynOpts.niter === undefined && opts.diameter !== undefined && scale !== 1) {
-    dynOpts.niter = Math.max(1, Math.floor(200 / scale));
+  let averagedData = averageTiles(flows, h, w).data;
+  // Resolution the dynamical system actually runs at, and the Euler step count
+  // that goes with it. Mirrors models.py:_run_net / _run_cp:
+  //   resample=True  → flows are resized back to source resolution first, and
+  //                    niter scales with the resize factor (200 / rescale),
+  //                    because each cell now spans 1/rescale as many pixels.
+  //   resample=False → dynamics run at network resolution, where a cell is
+  //                    already ~30 px across, so niter stays at the base 200.
+  // Upstream gates this explicitly:
+  //   niter_scale = 1 if rescale is None or not resample else rescale
+  const resample = opts.resample ?? false;
+  let dynW = w,
+    dynH = h,
+    niterScale = 1;
+  if (resample && scale !== 1) {
+    dynW = image.width;
+    dynH = image.height;
+    // dP (2 planes) + cellprob (1 plane), bilinear, values not magnitude-scaled.
+    averagedData = resizeChw(averagedData, 3, w, h, dynW, dynH);
+    niterScale = scale;
   }
-  const m = computeMasks(dPFull, cpFull, h, w, dynOpts);
 
-  // Inverse-resize labels back to source resolution (nearest-neighbor).
+  const hwFull = dynH * dynW;
+  const dPFull = averagedData.subarray(0, 2 * hwFull) as Float32Array;
+  const cpFull = averagedData.subarray(2 * hwFull, 3 * hwFull) as Float32Array;
+  const dynOpts: ComputeMasksOptions = { ...(opts.dynamics ?? {}) };
+  if (dynOpts.niter === undefined && niterScale !== 1) {
+    dynOpts.niter = Math.max(1, Math.floor(200 / niterScale));
+  }
+  const m = computeMasks(dPFull, cpFull, dynH, dynW, dynOpts);
+
+  // Inverse-resize labels back to source resolution (nearest-neighbor). With
+  // resample the dynamics already ran at source resolution, so labels are
+  // final — and their boundaries follow the flow field rather than a
+  // nearest-neighbor upscale of a smaller label map.
   let masksSrc = m.masks;
-  let outW = w,
-    outH = h;
-  if (scale !== 1) {
+  let outW = dynW,
+    outH = dynH;
+  if (dynW !== image.width || dynH !== image.height) {
     outW = image.width;
     outH = image.height;
     const resized = new Uint32Array(outW * outH);
     for (let yy = 0; yy < outH; yy++) {
-      const sy = Math.min(h - 1, Math.max(0, Math.round(yy * scale)));
-      const srcRow = sy * w;
+      const sy = Math.min(dynH - 1, Math.max(0, Math.round(yy * scale)));
+      const srcRow = sy * dynW;
       const dstRow = yy * outW;
       for (let xx = 0; xx < outW; xx++) {
-        const sx = Math.min(w - 1, Math.max(0, Math.round(xx * scale)));
+        const sx = Math.min(dynW - 1, Math.max(0, Math.round(xx * scale)));
         resized[dstRow + xx] = m.masks[srcRow + sx] as number;
       }
     }

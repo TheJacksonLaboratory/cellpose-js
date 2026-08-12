@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-08-12
+
+Re-synced against upstream [`MouseLand/cellpose`](https://github.com/MouseLand/cellpose)
+`main` @ `a54cb48` (2026-06-14). The previous parity baseline was the 2026-05-22
+review. Output of `segment()` changes for callers on the default channel path;
+snapshot or regression-pinned consumers should review.
+
+### Changed
+
+- **BREAKING (behavior): channels now pass through by default.** With neither
+  `chan` nor `chan2` set, the first up-to-3 source channels are copied straight
+  to the network and normalized independently — RGBA in, `[R, G, B]` out (alpha
+  dropped). Previously the default was `chan = 0`, which collapsed the source to
+  a grayscale **mean** in channel 0 and zeroed channels 1–2.
+
+  This matches upstream v4, where `transforms.convert_image` performs no channel
+  selection at all (it truncates with `x[..., :3]` and lets `normalize_img`
+  rescale each channel on its own percentiles), and the `channels=` argument now
+  logs _"Cellpose4 takes inputs with arbitrary channel orders"_. For RGB
+  fluorescence composites this keeps every marker at full dynamic range instead
+  of blending them.
+
+  **`chan` / `chan2` are unchanged and still supported** — setting either one
+  restores the Cellpose 1–3 selection mapping exactly as before. Callers who
+  want the old default back can pass `{ chan: 0 }` explicitly.
+
+- **`niter` is no longer scaled when dynamics run at network resolution.**
+  `segment()` runs the dynamical system on the resized image, but was scaling
+  the Euler iteration count as though it ran at source resolution
+  (`200 / scale`). At `diameter = 15` (scale 2) that gave 100 iterations where
+  200 were needed — under-integration, which fragments cells; above 30 it merely
+  wasted time. Upstream gates the same scaling explicitly
+  (`niter_scale = 1 if rescale is None or not resample else rescale`,
+  `models.py:_run_cp`). Only affects calls that pass `diameter`.
+
+### Added
+
+- **`resample` option** (default `false`). When `diameter` triggers a resize,
+  `resample: true` bilinear-upsamples the predicted flow field and cellprob back
+  to source resolution before running dynamics there, with `200 / scale`
+  iterations — upstream's default (`models.py:_run_net`). Mask boundaries then
+  follow the flow field instead of a nearest-neighbor upscale of a smaller label
+  map, at the cost of running dynamics over the full-resolution image. The
+  default keeps the existing (cheaper) behavior.
+- **`resizeChw`** exported from `preprocess/` — the bilinear CHW resize backing
+  both `diameterResize` and the `resample` path.
+- **Clear error for `tile !== 256`.** CPSAM's position embeddings are fixed at
+  256/8 = 32×32 tokens and the ONNX export hardcodes H/W to 256, so other tile
+  sizes previously failed deep inside ORT with an opaque shape error. Upstream
+  raises the same restriction (_"bsize != 256 is not supported for cpsam"_).
+
+### Documentation
+
+- **Corrected the pipeline diagram in the README.** It showed
+  `diameterResize → normalizePerChannel`; the code has run normalize _before_
+  resize since 0.2.0 (matching `models.py:_run_cp`).
+- **New "Upstream parity" section** recording the parity commit, the model-zoo
+  situation, and known divergences. Notably: upstream's default model is now
+  `cpsam_v2`, which is architecturally identical to `cpsam` (`get_backbone()`
+  returns `"sam_vitl"` for it, instantiating the same `CPSAM` class), so the
+  existing FP16 ONNX export recipe applies unchanged and `fromPretrained()`
+  needs no API change to load it. `cpdino` / `cpdino-vitb` are DINOv3-based with
+  `bsize` 384 and are not supported.
+
 ## [0.4.1] — 2026-07-22
 
 ### Fixed
@@ -157,6 +221,7 @@ label maps. See [`docs/PLAN.md`](./docs/PLAN.md) for the full milestone trail
 and [`docs/STAGE0-RESULTS.md`](./docs/STAGE0-RESULTS.md) for parity / latency
 measurements.
 
+[0.5.0]: https://github.com/belkassaby/Cellpose.js/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/belkassaby/Cellpose.js/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/belkassaby/Cellpose.js/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/belkassaby/Cellpose.js/compare/v0.2.0...v0.3.0

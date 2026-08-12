@@ -45,8 +45,26 @@ export interface SegmentInput {
 
 export interface SegmentOptions extends ChannelMapOptions {
   diameter?: number;
+  /** Tile size fed to the network. CPSAM only supports 256 — its position
+   *  embeddings and the ONNX export are both fixed at that size. Default 256. */
   tile?: number;
   overlap?: number;
+  /**
+   * Where the flow-dynamics step runs when `diameter` triggers a resize.
+   *
+   * - `false` (default): dynamics run at the resized (network) resolution and
+   *   the label map is upscaled nearest-neighbor. Cheapest — the dynamical
+   *   system only ever sees the downscaled image.
+   * - `true`: the predicted flow field and cellprob are bilinear-upsampled back
+   *   to source resolution first, and dynamics run there with a proportionally
+   *   larger iteration count. This is upstream Cellpose's default
+   *   (`models.py:_run_net`, `resample=True`); mask boundaries follow the flows
+   *   instead of a blocky upscale, at the cost of running dynamics over the
+   *   full-resolution image.
+   *
+   * No effect when `diameter` is omitted (no resize happens either way).
+   */
+  resample?: boolean;
   normalize?: NormalizeOptions;
   /** Dynamics postprocessing knobs. */
   dynamics?: ComputeMasksOptions;

@@ -151,6 +151,21 @@ export function resizeChw(
   dstW: number,
   dstH: number,
 ): Float32Array {
+  // Validate the geometry before allocating. The buffer-length check alone
+  // can't catch these: a zero-width source pairs with an empty buffer and
+  // passes, then reads past the end of `src` and fills the output with NaN,
+  // and a fractional dimension silently truncates the write loops.
+  for (const [name, v] of [
+    ['channels', channels],
+    ['srcW', srcW],
+    ['srcH', srcH],
+    ['dstW', dstW],
+    ['dstH', dstH],
+  ] as const) {
+    if (!Number.isInteger(v) || v < 1) {
+      throw new Error(`resizeChw: ${name} must be a positive integer, got ${v}`);
+    }
+  }
   const hwIn = srcW * srcH;
   const hwOut = dstW * dstH;
   if (chw.length !== channels * hwIn) {

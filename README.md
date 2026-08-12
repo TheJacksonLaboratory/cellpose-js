@@ -203,14 +203,20 @@ This is a port, so it tracks a specific point in [MouseLand/cellpose](https://gi
 
 Upstream's default model is now **`cpsam_v2`**, with `cpdino` / `cpdino-vitb` alongside it. Cellpose.js ships against `cpsam`:
 
-| Upstream model | Architecture            | Status here                                          |
-| -------------- | ----------------------- | ---------------------------------------------------- |
-| `cpsam`        | `CPSAM` (SAM ViT-L)     | **Supported** — `cpsam_fp16.onnx`                    |
-| `cpsam_v2`     | `CPSAM` (SAM ViT-L)     | Export-compatible, not yet published — see below     |
-| `cpdino`       | DINOv3 ViT-L, bsize 384 | Not supported — different architecture and tile size |
-| `cpdino-vitb`  | DINOv3 ViT-B, bsize 384 | Not supported                                        |
+| Upstream model | Architecture            | Status here                                           |
+| -------------- | ----------------------- | ----------------------------------------------------- |
+| `cpsam`        | `CPSAM` (SAM ViT-L)     | **Supported** — `cpsam_fp16.onnx`                     |
+| `cpsam_v2`     | `CPSAM` (SAM ViT-L)     | **Exported and verified**, not yet hosted — see below |
+| `cpdino`       | DINOv3 ViT-L, bsize 384 | Not supported — different architecture and tile size  |
+| `cpdino-vitb`  | DINOv3 ViT-B, bsize 384 | Not supported                                         |
 
-`cpsam_v2` is **architecturally identical** to `cpsam`: upstream's `models.get_backbone()` inspects the checkpoint for `encoder.cls_token`, finds none, and returns `"sam_vitl"`, so it instantiates the same `CPSAM` class with the same `ps=8` / `bsize=256` / `nout=3` geometry. The existing FP16 ONNX export recipe (see [`docs/STAGE0-RESULTS.md`](./docs/STAGE0-RESULTS.md) — export directly in FP16 from `CPSAM(dtype=torch.float16)`; post-hoc FP16 conversion is broken) therefore applies unchanged; only the weights differ. Once an ONNX build is published, no library change is needed — `fromPretrained()` already accepts any URL:
+`cpsam_v2` is **architecturally identical** to `cpsam`, confirmed against the checkpoint: upstream's `models.get_backbone()` finds no `encoder.cls_token` and returns `"sam_vitl"`, so it instantiates the same `CPSAM` class, and the weights carry `patch_embed.proj.weight (1024,3,8,8)`, `pos_embed (1,32,32,1024)` (= 256/8 = 32² tokens) and `out.weight (192,256,1,1)` (= `nout·ps²`) at the same 304.6 M params. Only the values differ.
+
+An FP16 ONNX build has been produced and gated against an FP32 PyTorch reference — **618 MB, worst max abs error 3.4e-03, cosine 0.999999** over 10 tiles (outputs span ~[-4.5, 0.05], so that is ~0.08% of range). It exposes exactly the I/O this library reads: input `image` `(1,3,256,256)` fp16, output `flows_cellprob` `(1,3,256,256)` fp16.
+
+The exporter lives in [`browser-onnx-tools`](https://github.com/belkassaby/browser-onnx-tools) as `export/export_cellpose_onnx.py` (see its README for the two non-obvious traps: `CPSAM.forward`'s `.data` reads become FakeTensors under `torch.export`, and PyTorch's FP16 **CPU** forward diverges from its own FP32 by cosine 0.83, so it cannot be used as a parity reference). FP16 must be exported directly from `CPSAM(dtype=torch.float16)`; post-hoc conversion is broken, as [`docs/STAGE0-RESULTS.md`](./docs/STAGE0-RESULTS.md) first recorded.
+
+The artifact is **not hosted yet**. Once it is, no library change is needed — `fromPretrained()` already accepts any URL:
 
 ```ts
 const cp = await Cellpose.fromPretrained('https://your-cdn/cpsam_v2_fp16.onnx');

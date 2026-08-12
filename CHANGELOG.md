@@ -49,8 +49,11 @@ snapshot or regression-pinned consumers should review.
   follow the flow field instead of a nearest-neighbor upscale of a smaller label
   map, at the cost of running dynamics over the full-resolution image. The
   default keeps the existing (cheaper) behavior.
-- **`resizeChw`** exported from `preprocess/` — the bilinear CHW resize backing
-  both `diameterResize` and the `resample` path.
+- **`resizeChw`** (internal) — the bilinear CHW resize extracted out of
+  `diameterResize` so the `resample` path can reuse it. Not public API: like
+  every other `preprocess/` helper it is reachable only from inside the package,
+  since the root entry point and the `exports` map expose neither it nor the
+  `preprocess/` barrel.
 - **Clear error for `tile !== 256`.** CPSAM's position embeddings are fixed at
   256/8 = 32×32 tokens and the ONNX export hardcodes H/W to 256, so other tile
   sizes previously failed deep inside ORT with an opaque shape error. Upstream

@@ -40,7 +40,7 @@ export interface DiameterResizeOptions {
  *   src_y = (dst_y + 0.5) * (srcH / dstH) - 0.5
  * Out-of-bounds samples replicate the nearest edge pixel (BORDER_REPLICATE).
  */
-function resizeChannel(
+export function resizeChannel(
   src: Float32Array,
   srcW: number,
   srcH: number,
@@ -123,13 +123,58 @@ export function diameterResize(
         `diameter is ${opts.diameter}. Increase diameter to downscale less aggressively.`,
     );
   }
+  return {
+    data: resizeChw(chw, channels, width, height, dstW, dstH),
+    width: dstW,
+    height: dstH,
+    scale,
+  };
+}
+
+/**
+ * Bilinear-resize every channel of a CHW Float32 image to `dstW` x `dstH`.
+ *
+ * Used both by {@link diameterResize} on the input image and by the `resample`
+ * path in the worker, which upsamples the predicted flow field + cellprob back
+ * to source resolution before running dynamics (mirrors
+ * `models.py:_run_net`'s `transforms.resize_image(yf, shape[1], shape[2])`).
+ *
+ * Note that flow VECTORS are resized as plain values — their magnitudes are not
+ * rescaled by the resize factor. Upstream compensates by scaling the Euler
+ * iteration count instead (`niter = 200 / rescale`), and so do we.
+ */
+export function resizeChw(
+  chw: Float32Array,
+  channels: number,
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number,
+): Float32Array {
+  // Validate the geometry before allocating. The buffer-length check alone
+  // can't catch these: a zero-width source pairs with an empty buffer and
+  // passes, then reads past the end of `src` and fills the output with NaN,
+  // and a fractional dimension silently truncates the write loops.
+  for (const [name, v] of [
+    ['channels', channels],
+    ['srcW', srcW],
+    ['srcH', srcH],
+    ['dstW', dstW],
+    ['dstH', dstH],
+  ] as const) {
+    if (!Number.isInteger(v) || v < 1) {
+      throw new Error(`resizeChw: ${name} must be a positive integer, got ${v}`);
+    }
+  }
+  const hwIn = srcW * srcH;
   const hwOut = dstW * dstH;
-  const hwIn = width * height;
+  if (chw.length !== channels * hwIn) {
+    throw new Error(`resizeChw: expected ${channels * hwIn} floats, got ${chw.length}`);
+  }
   const out = new Float32Array(channels * hwOut);
   for (let c = 0; c < channels; c++) {
     const srcView = chw.subarray(c * hwIn, (c + 1) * hwIn);
-    const resized = resizeChannel(srcView, width, height, dstW, dstH);
-    out.set(resized, c * hwOut);
+    out.set(resizeChannel(srcView, srcW, srcH, dstW, dstH), c * hwOut);
   }
-  return { data: out, width: dstW, height: dstH, scale };
+  return out;
 }

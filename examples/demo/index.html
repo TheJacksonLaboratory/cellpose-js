@@ -90,23 +90,30 @@
     <div class="row">
       Diameter (px):
       <input id="diameter" type="number" value="" size="6" placeholder="auto/skip" /> Tile:
-      <input id="tile" type="number" value="256" size="5" /> chan:
+      <input id="tile" type="number" value="256" size="5" title="CPSAM requires 256" />
+      <label title="upsample flows to source resolution before dynamics (upstream default)">
+        <input id="resample" type="checkbox" />
+        resample
+      </label>
+      chan:
       <input
         id="chan"
         type="number"
-        value="0"
+        value=""
         min="0"
         size="2"
-        title="0=grayscale (mean); 1=R, 2=G, 3=B; N=source channel N-1"
+        placeholder="auto"
+        title="blank = passthrough (R,G,B each become their own channel — the default); 0=grayscale (mean); 1=R, 2=G, 3=B; N=source channel N-1"
       />
       chan2:
       <input
         id="chan2"
         type="number"
-        value="0"
+        value=""
         min="0"
         size="2"
-        title="secondary channel; 0=none"
+        placeholder="auto"
+        title="secondary channel; blank = passthrough, 0 = none"
       />
       <button id="go" disabled>Run</button>
       <button id="abort" disabled>Abort</button>

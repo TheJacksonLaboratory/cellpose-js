@@ -60,8 +60,9 @@ const result = await cp.segment(
   { data: imageData.data, width: imageData.width, height: imageData.height, channels: 4 },
   {
     diameter: 30, // estimated cell diameter in source pixels (omit for native resolution)
-    chan: 0, // primary channel (0 = grayscale = mean of color channels)
-    chan2: 0, // secondary channel (0 = none)
+    // chan / chan2 omitted → passthrough: R,G,B each become their own
+    // independently-normalized network channel (what upstream Cellpose v4 does)
+    resample: false, // true → run dynamics at source resolution (upstream default)
     dynamics: { cellprobThreshold: 0 }, // pixels above this enter the dynamical system
     onTileProgress: (done, total) => console.log(`tile ${done}/${total}`),
   },
@@ -78,24 +79,40 @@ console.log(`Found ${result.count} cells.`);
 
 ## Parameter quick-reference
 
-### `chan` / `chan2`
+### Channels — the default is passthrough
 
-CPSAM was trained with channel-shuffling augmentation, so the cyto-vs-nuclei _assignment_ rarely matters — but you still need to point it at the channel(s) that actually carry signal.
+**Omit `chan` and `chan2`.** The first up-to-3 source channels are copied straight to the network and normalized independently:
 
-- **`chan = 0`** — grayscale: the **mean** of the source's color channels (alpha is excluded for RGBA input, i.e. `channels === 4`). Mirrors `cellpose.transforms` (`data.mean(axis=-1)`). Use for brightfield / H&E / phase, or any RGB image whose signal is really one thing shown in color.
+| Source           | Network input               |
+| ---------------- | --------------------------- |
+| Grayscale (1 ch) | `[gray, 0, 0]`              |
+| 2-channel        | `[c0, c1, 0]`               |
+| RGB (3 ch)       | `[R, G, B]`                 |
+| RGBA (4 ch)      | `[R, G, B]` — alpha dropped |
+| N > 4            | first 3 channels            |
+
+This is what upstream Cellpose v4 does. `transforms.convert_image` performs no channel selection at all — it orders the array as YXC, truncates with `x[..., :3]`, and lets `normalize_img` rescale each channel on its own percentiles. CPSAM was trained with channel-shuffling augmentation, so it has no fixed expectation about which slot holds what; upstream's `channels=` argument is deprecated and logs _"Cellpose4 takes inputs with arbitrary channel orders"_.
+
+For an RGB fluorescence composite this matters: passthrough keeps all three markers at full dynamic range, where collapsing to a grayscale mean would blend them.
+
+### `chan` / `chan2` (legacy, opt-in)
+
+Setting **either** option switches to the Cellpose 1–3 selection mapping, so existing parameter choices lift over unchanged:
+
+- **`chan = 0`** — grayscale: the **mean** of the source's color channels (alpha is excluded for RGBA input, i.e. `channels === 4`). Mirrors Cellpose 1–3's `data.mean(axis=-1)` for `channels=[0,0]`. Reach for it when an RGB image's signal really is one thing shown in color and you want it in a single channel.
 - **`chan = 1 | 2 | 3`** — pick red / green / blue directly, no averaging.
 - **`chan = k` (k ≥ 1)** — selects source channel `k − 1` (0-based), for _any_ channel count. A 5-channel microscopy stack can use `chan = 4` to pick channel 3.
-- **`chan2`** — same indexing for the secondary (nuclear) channel; `0` = none.
+- **`chan2`** — same indexing for the secondary (nuclear) channel; `0` = none. Setting only `chan2` still leaves passthrough mode, with `chan` defaulting to `0`.
 
-> **Multichannel images:** each channel is usually distinct biology (e.g. DAPI vs. GFP), so **never use `chan = 0`** on them — averaging different markers is meaningless. Select the channel you want with `chan`/`chan2 ≥ 1` instead (which never averages). CPSAM only ever consumes a 3-channel `[primary, secondary, 0]` input, so reducing a stack to "which channel is cytoplasm, which is nucleus" is required regardless.
+> **Multichannel images:** each channel is usually distinct biology (e.g. DAPI vs. GFP), so **never use `chan = 0`** on them — averaging different markers is meaningless. Either stay on the passthrough default (which keeps the first three markers separate) or select explicitly with `chan`/`chan2 ≥ 1`.
 
-| Image type                                             | `chan` | `chan2` |
-| ------------------------------------------------------ | ------ | ------- |
-| H&E histology, brightfield, phase contrast             | `0`    | `0`     |
-| Fluorescence: green cyto, blue nuclei                  | `2`    | `3`     |
-| Fluorescence: red cyto, green nuclei                   | `1`    | `2`     |
-| Multichannel stack: cyto = ch3, nuclei = ch0 (0-based) | `4`    | `1`     |
-| First run / unknown (single-signal image)              | `0`    | `0`     |
+| Image type                                             | `chan`   | `chan2`  |
+| ------------------------------------------------------ | -------- | -------- |
+| Anything with ≤ 3 informative channels                 | _(omit)_ | _(omit)_ |
+| RGB whose signal is one thing, want it collapsed       | `0`      | `0`      |
+| Fluorescence: green cyto, blue nuclei (only those two) | `2`      | `3`      |
+| Fluorescence: red cyto, green nuclei (only those two)  | `1`      | `2`      |
+| Multichannel stack: cyto = ch3, nuclei = ch0 (0-based) | `4`      | `1`      |
 
 ### `diameter`
 
@@ -106,6 +123,19 @@ Rescales the image so the median cell occupies ~30 px (CPSAM's training median).
 | Roughly 20–60 px across | leave blank          |
 | Tiny (5–15 px)          | ≈ 10                 |
 | Large (80+ px)          | your visual estimate |
+
+### `resample`
+
+Only relevant when `diameter` triggers a resize. Controls **where the flow-dynamics step runs**:
+
+- **`false` (default)** — dynamics run at the resized (network) resolution with the base 200 Euler iterations, and the label map is upscaled nearest-neighbor. Cheapest.
+- **`true`** — the predicted flow field and cellprob are bilinear-upsampled back to source resolution first, and dynamics run there with `200 / scale` iterations. This is upstream's default (`models.py:_run_net`, `resample=True`): mask boundaries follow the flow field rather than a blocky upscale, at the cost of running the dynamical system over the full-resolution image.
+
+Upstream ties the iteration count to this choice — `niter_scale = 1 if rescale is None or not resample else rescale` — and so do we. Passing `dynamics.niter` explicitly overrides both.
+
+### `tile`
+
+Must be **256**. CPSAM's position embeddings are baked in at 256/8 = 32×32 tokens and the ONNX export hardcodes H/W to 256, so any other value is rejected (upstream raises the same restriction: _"bsize != 256 is not supported for cpsam"_).
 
 ## Performance (M1 Max, Chrome 135+, WebGPU)
 
@@ -125,18 +155,22 @@ Rescales the image so the median cell occupies ~30 px (CPSAM's training median).
 The whole pipeline runs **inside the Web Worker**: the main thread posts the image with one `segment` message and receives the final `masks` (transferred back), so preprocessing and flow dynamics never block the UI.
 
 ```
-input image → buildCpsamChannels → diameterResize → normalizePerChannel → makeTiles
+input image → buildCpsamChannels → normalizePerChannel → diameterResize → makeTiles
                                                                               ⇣ (per tile)
                                                               ort.InferenceSession.run
                                                                               ⇣
                                                                        averageTiles
                                                                               ⇣
+                                                       resample ? resizeChw(flows → source res) : —
+                                                                              ⇣
                                                                        computeMasks (Euler + cluster + renumber)
                                                                               ⇣
-                                                                  (optional) nearest-neighbor unresize
+                                                       resample ? — : nearest-neighbor unresize
                                                                               ⇣
                                                                         Uint32Array masks
 ```
+
+Normalization runs **before** the diameter resize, matching `models.py:_run_cp` — resizing first would shift the per-channel percentiles that drive normalization.
 
 See [`src/`](./src/) for module-level documentation.
 
@@ -160,6 +194,40 @@ The demo at `examples/demo/` is a complete client that exercises the full pipeli
 | `Float16Array is not defined`                                                        | Browser too old                     | Chrome ≥135, Safari ≥17.4. No earlier polyfill is supported.                     |
 | `Operation aborted` after AbortSignal fires                                          | Working as intended                 | Worker terminates; next `segment()` call respawns from IDB cache (~150 ms).      |
 | Mask overlay has split cells at tile borders                                         | Tile-averaging regression           | Shouldn't happen — tile averaging stitches across borders. Please file an issue. |
+
+## Upstream parity
+
+This is a port, so it tracks a specific point in [MouseLand/cellpose](https://github.com/MouseLand/cellpose). Current parity baseline: **`a54cb48`** (main, 2026-06-14), covering `transforms.py`, `dynamics.py`, `models.py`, `core.py`, and `vit.py` for the **2D** path.
+
+### Model zoo
+
+Upstream's default model is now **`cpsam_v2`**, with `cpdino` / `cpdino-vitb` alongside it. Cellpose.js ships against `cpsam`:
+
+| Upstream model | Architecture            | Status here                                           |
+| -------------- | ----------------------- | ----------------------------------------------------- |
+| `cpsam`        | `CPSAM` (SAM ViT-L)     | **Supported** — `cpsam_fp16.onnx`                     |
+| `cpsam_v2`     | `CPSAM` (SAM ViT-L)     | **Exported and verified**, not yet hosted — see below |
+| `cpdino`       | DINOv3 ViT-L, bsize 384 | Not supported — different architecture and tile size  |
+| `cpdino-vitb`  | DINOv3 ViT-B, bsize 384 | Not supported                                         |
+
+`cpsam_v2` is **architecturally identical** to `cpsam`, confirmed against the checkpoint: upstream's `models.get_backbone()` finds no `encoder.cls_token` and returns `"sam_vitl"`, so it instantiates the same `CPSAM` class, and the weights carry `patch_embed.proj.weight (1024,3,8,8)`, `pos_embed (1,32,32,1024)` (= 256/8 = 32² tokens) and `out.weight (192,256,1,1)` (= `nout·ps²`) at the same 304.6 M params. Only the values differ.
+
+An FP16 ONNX build has been produced and gated against an FP32 PyTorch reference — **618 MB, worst max abs error 3.4e-03, cosine 0.999999** over 10 tiles (outputs span ~[-4.5, 0.05], so that is ~0.08% of range). It exposes exactly the I/O this library reads: input `image` `(1,3,256,256)` fp16, output `flows_cellprob` `(1,3,256,256)` fp16.
+
+The exporter lives in [`browser-onnx-tools`](https://github.com/belkassaby/browser-onnx-tools) as `export/export_cellpose_onnx.py` (see its README for the two non-obvious traps: `CPSAM.forward`'s `.data` reads become FakeTensors under `torch.export`, and PyTorch's FP16 **CPU** forward diverges from its own FP32 by cosine 0.83, so it cannot be used as a parity reference). FP16 must be exported directly from `CPSAM(dtype=torch.float16)`; post-hoc conversion is broken, as [`docs/STAGE0-RESULTS.md`](./docs/STAGE0-RESULTS.md) first recorded.
+
+The artifact is **not hosted yet**. Once it is, no library change is needed — `fromPretrained()` already accepts any URL:
+
+```ts
+const cp = await Cellpose.fromPretrained('https://your-cdn/cpsam_v2_fp16.onnx');
+```
+
+### Known divergences
+
+- **`resample` defaults to `false`**, where upstream defaults to `true`. Opt in for upstream-identical mask geometry.
+- **Labels are always `Uint32Array`.** Upstream downcasts to `uint16` when an image has fewer than 65,536 masks; changing the returned type here would break consumers, so it stays 32-bit.
+- **`normalize99` percentile downsampling is not implemented.** Upstream estimates percentiles from a strided subsample once an image exceeds 224³ ≈ 11.2 M pixels (a 2D image beyond ~3350×3350). Below that threshold the two agree exactly; above it, upstream's percentiles are an approximation of the ones computed here.
+- **3D (`do_3D`, `stitch3D`, anisotropy), training, and the model-zoo loader are out of scope.**
 
 ## Credits
 

@@ -3,11 +3,36 @@
  *
  * Cellpose-SAM (per the bioRxiv preprint) was trained with channel-shuffling
  * augmentation, so it does not privilege any specific channel as cyto vs
- * nuclei. Still, we keep the legacy `chan` (cytoplasm) / `chan2` (nuclei)
- * semantics so callers familiar with Cellpose 1-3 can lift their existing
- * parameter choices unchanged.
+ * nuclei. Upstream Cellpose v4 leans on that: `cellpose.transforms.convert_image`
+ * performs NO channel selection — it just orders the array as YXC, truncates to
+ * the first 3 channels, and hands them to the network, which normalizes each
+ * independently. The legacy `channels=` argument is deprecated there and logs
+ * "Cellpose4 takes inputs with arbitrary channel orders".
  *
- * Channel mapping (mirrors Cellpose's convention, extended for N-channel data):
+ * This module follows that default, while keeping the legacy `chan` / `chan2`
+ * selection available for callers who need it.
+ *
+ * ## Passthrough (default — neither `chan` nor `chan2` given)
+ *
+ * The first `min(3, channels)` source channels are copied straight through to
+ * output slots 0..2; any remaining output slot stays zero. This matches
+ * upstream's `x[..., :3]` truncation.
+ *
+ *   1-channel source → [gray,  0,     0    ]
+ *   2-channel source → [c0,    c1,    0    ]
+ *   3-channel (RGB)  → [R,     G,     B    ]
+ *   4-channel (RGBA) → [R,     G,     B    ]   (alpha dropped by truncation)
+ *   N > 4            → [c0,    c1,    c2   ]   (upstream warns and truncates)
+ *
+ * Because `normalizePerChannel` runs per channel, an RGB fluorescence composite
+ * keeps all three markers with independent dynamic ranges — the same input the
+ * Python reference would build.
+ *
+ * ## Explicit selection (`chan` and/or `chan2` given)
+ *
+ * Supplying either option switches to the Cellpose 1-3 style mapping, so
+ * callers with existing parameter choices can lift them unchanged:
+ *
  *   chan = 0    → grayscale: MEAN across the source's color channels
  *   chan = 1    → red    (source channel 0)
  *   chan = 2    → green  (source channel 1)
@@ -19,12 +44,10 @@
  *
  * Grayscale (chan=0) AVERAGES channels — appropriate only when the caller
  * explicitly wants grayscale (e.g. an RGB display image whose signal is really
- * one thing). It mirrors cellpose.transforms (`data.mean(axis=-1)` for
- * channels=[0,0]) and is what makes green- or blue-dominant fluorescence images
- * work under the default (a red-only pick would blank them out). Distinct-data
- * multichannel images must NOT use chan=0 — averaging different markers is
- * meaningless; select the relevant channel with chan/chan2 (>= 1) instead, which
- * never averages.
+ * one thing). It mirrors Cellpose 1-3's `data.mean(axis=-1)` for channels=[0,0].
+ * Distinct-data multichannel images must NOT use chan=0 — averaging different
+ * markers is meaningless; select the relevant channel with chan/chan2 (>= 1)
+ * instead, which never averages, or use the passthrough default.
  *
  * For canvas/PNG RGBA input (channels===4) the 4th channel is alpha (opacity),
  * not image signal, so it is EXCLUDED from the grayscale mean — otherwise a
@@ -32,15 +55,19 @@
  * 4-channel image therefore should select channels explicitly rather than rely
  * on chan=0 (which would treat its 4th channel as alpha and drop it).
  *
- * Output is always a (3, H, W) Float32 array, channel-major, in the order
- * [chan, chan2-or-zero, zero].
+ * Output is always a (3, H, W) Float32 array, channel-major.
  */
 
 export interface ChannelMapOptions {
   /** Primary (cytoplasm) channel. 0 = grayscale (mean of color channels);
-   *  k >= 1 selects source channel k-1 (0-based). Default 0. */
+   *  k >= 1 selects source channel k-1 (0-based).
+   *
+   *  Leave BOTH `chan` and `chan2` unset for the default passthrough, which
+   *  copies the first up-to-3 source channels through unchanged (matches
+   *  upstream Cellpose v4). Setting either one switches to explicit selection. */
   chan?: number;
-  /** Secondary (nuclear) channel, same indexing. 0 = none. Default 0. */
+  /** Secondary (nuclear) channel, same indexing. 0 = none.
+   *  Setting this switches out of passthrough mode; `chan` then defaults to 0. */
   chan2?: number;
 }
 
@@ -61,7 +88,6 @@ export function buildCpsamChannels(
   channels: number,
   opts: ChannelMapOptions = {},
 ): Float32Array {
-  const { chan = 0, chan2 = 0 } = opts;
   if (!Number.isInteger(channels) || channels < 1) {
     throw new Error(`buildCpsamChannels: channels must be a positive integer, got ${channels}`);
   }
@@ -72,6 +98,21 @@ export function buildCpsamChannels(
     );
   }
   const out = new Float32Array(3 * hw);
+
+  // Neither option given → upstream v4 passthrough: copy the first up-to-3
+  // source channels into output slots 0..2 and leave the rest zero.
+  if (opts.chan === undefined && opts.chan2 === undefined) {
+    const nCopy = Math.min(3, channels);
+    for (let c = 0; c < nCopy; c++) {
+      const offset = c * hw;
+      for (let i = 0; i < hw; i++) {
+        out[offset + i] = src[i * channels + c] as number;
+      }
+    }
+    return out;
+  }
+
+  const { chan = 0, chan2 = 0 } = opts;
 
   // Source is pixel-interleaved (e.g. RGBA): src[i*ch + c].
   //   idx = 0  → grayscale = mean across color channels (alpha excluded for RGBA).

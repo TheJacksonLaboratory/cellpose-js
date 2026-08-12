@@ -25,6 +25,7 @@ export interface WorkerSegmentOptions extends ChannelMapOptions {
   diameter?: number;
   tile?: number;
   overlap?: number;
+  resample?: boolean;
   normalize?: NormalizeOptions;
   dynamics?: ComputeMasksOptions;
 }

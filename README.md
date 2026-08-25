@@ -1,6 +1,6 @@
 # cellpose-js
 
-[![CI / CD](https://github.com/belkassaby/Cellpose.js/actions/workflows/ci-cd.yaml/badge.svg)](https://github.com/belkassaby/Cellpose.js/actions/workflows/ci-cd.yaml)
+[![CI / CD](https://github.com/TheJacksonLaboratory/cellpose-js/actions/workflows/ci-cd.yaml/badge.svg)](https://github.com/TheJacksonLaboratory/cellpose-js/actions/workflows/ci-cd.yaml)
 [![npm version](https://img.shields.io/npm/v/cellpose-js.svg)](https://www.npmjs.com/package/cellpose-js)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)](https://www.typescriptlang.org/)

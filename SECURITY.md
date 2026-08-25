@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-If you believe you've found a vulnerability in `cellpose-js`, please **do not** open a public issue. Email the maintainer directly or file a [private security advisory](https://github.com/belkassaby/Cellpose.js/security/advisories/new). We'll respond within a week.
+If you believe you've found a vulnerability in `cellpose-js`, please **do not** open a public issue. Email the maintainer directly or file a [private security advisory](https://github.com/TheJacksonLaboratory/cellpose-js/security/advisories/new). We'll respond within a week.
 
 ## Threat model and input-handling surface
 
@@ -40,7 +40,7 @@ If you're integrating `cellpose-js` into a product:
 
 ## Build & supply chain
 
-- **Source:** [github.com/belkassaby/Cellpose.js](https://github.com/belkassaby/Cellpose.js) (public, MIT). `main` is protected; all changes via PR.
+- **Source:** [github.com/TheJacksonLaboratory/cellpose-js](https://github.com/TheJacksonLaboratory/cellpose-js) (public, MIT). `main` is protected; all changes via PR.
 - **Build:** plain `tsc` emits to `dist/`. No bundler, no minification, no transformation beyond TypeScript transpilation. The published JS is reviewable diff-for-diff against the source.
 - **CI:** every push and PR runs `tsc --noEmit`, ESLint, Prettier, Vitest, and a build — see [`.github/workflows/ci-cd.yaml`](./.github/workflows/ci-cd.yaml).
 - **Publish provenance:** every npm release ships with a signed [sigstore provenance attestation](https://docs.npmjs.com/generating-provenance-statements) linking the tarball back to the GitHub Actions run that built it. Verify with `npm view cellpose-js dist.attestations`.

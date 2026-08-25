@@ -24,7 +24,7 @@ language:
 Single-file FP16 ONNX export of **Cellpose-SAM** (CPSAM), the ViT-L–based cellular
 segmentation model from [Stringer et al., 2025](https://www.biorxiv.org/content/10.1101/2025.04.28.651001v1).
 Intended for in-browser inference via WebGPU through
-[`cellpose-js`](https://github.com/belkassaby/Cellpose.js), but usable from any
+[`cellpose-js`](https://github.com/TheJacksonLaboratory/cellpose-js), but usable from any
 ONNX Runtime backend that supports opset 18 and FP16 graph IO.
 
 - **Architecture:** SAM ViT-L image encoder (modified — patch size 8, no windowed
@@ -85,7 +85,7 @@ const result = await cp.segment(
 The first call fetches 588 MB from the Hub; subsequent calls hit IndexedDB and
 cold-start in under ~2 s.
 
-See the [cellpose-js README](https://github.com/belkassaby/Cellpose.js#readme)
+See the [cellpose-js README](https://github.com/TheJacksonLaboratory/cellpose-js#readme)
 for the full API, parameter reference, and Python parity notes.
 
 ### With ONNX Runtime directly (Python)
@@ -103,7 +103,7 @@ flow_y, flow_x, cellprob = out[0, 0], out[0, 1], out[0, 2]
 For flow-dynamics postprocessing (Euler integration → convergence clustering →
 connected components → size/flow filtering), use either:
 
-- the JS port in [`cellpose-js/src/dynamics`](https://github.com/belkassaby/Cellpose.js/tree/main/src), or
+- the JS port in [`cellpose-js/src/dynamics`](https://github.com/TheJacksonLaboratory/cellpose-js/tree/main/src), or
 - the original Python implementation in
   [`cellpose.dynamics`](https://cellpose.readthedocs.io/) — input/output
   contracts match.
@@ -141,8 +141,8 @@ ORT-web 1.26 is ~2.3× faster than 1.20 on the WebGPU kernels — the steady-sta
 ## How the model was generated
 
 The export path is documented in
-[`docs/STAGE0-RESULTS.md`](https://github.com/belkassaby/Cellpose.js/blob/main/docs/STAGE0-RESULTS.md)
-and [`docs/PLAN.md §1.5, §2`](https://github.com/belkassaby/Cellpose.js/blob/main/docs/PLAN.md).
+[`docs/STAGE0-RESULTS.md`](https://github.com/TheJacksonLaboratory/cellpose-js/blob/main/docs/STAGE0-RESULTS.md)
+and [`docs/PLAN.md §1.5, §2`](https://github.com/TheJacksonLaboratory/cellpose-js/blob/main/docs/PLAN.md).
 The short version:
 
 1. **Source weights**: `mouseland/cellpose-sam` (PyTorch, 1.23 GB, 304.6 M params).
@@ -247,7 +247,7 @@ https://www.biorxiv.org/content/10.1101/2025.04.28.651001v1
 
 - **Source checkpoint:** `mouseland/cellpose-sam` on Hugging Face Hub.
 - **Export scripts and ONNX artifact ETag** (`52fd6881…`) are recorded in
-  [`docs/STAGE0-RESULTS.md`](https://github.com/belkassaby/Cellpose.js/blob/main/docs/STAGE0-RESULTS.md).
+  [`docs/STAGE0-RESULTS.md`](https://github.com/TheJacksonLaboratory/cellpose-js/blob/main/docs/STAGE0-RESULTS.md).
 - **Parity test fixtures** (numpy-generated FP32 reference tiles + expected
   flow outputs) live in `tests/fixtures/` in the `cellpose-js` repo.
 
@@ -267,7 +267,7 @@ https://www.biorxiv.org/content/10.1101/2025.04.28.651001v1
 
 ## Related
 
-- **Code:** [`belkassaby/Cellpose.js`](https://github.com/belkassaby/Cellpose.js) — TypeScript inference + dynamics port.
+- **Code:** [`TheJacksonLaboratory/cellpose-js`](https://github.com/TheJacksonLaboratory/cellpose-js) — TypeScript inference + dynamics port.
 - **npm:** [`cellpose-js`](https://www.npmjs.com/package/cellpose-js).
 - **Upstream:** [`MouseLand/cellpose`](https://github.com/MouseLand/cellpose) and [`mouseland/cellpose-sam`](https://huggingface.co/mouseland/cellpose-sam).
 - **Paper:** [Cellpose-SAM (bioRxiv 2025.04.28)](https://www.biorxiv.org/content/10.1101/2025.04.28.651001v1).

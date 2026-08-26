@@ -84,7 +84,7 @@ End-to-end timings from real jit-ui runs:
 
 ## What Phase 1 ships
 
-- **Public GitHub repo** — https://github.com/belkassaby/Cellpose.js
+- **Public GitHub repo** — https://github.com/TheJacksonLaboratory/cellpose-js
 - **Public HF Hub model** — https://huggingface.co/ballon999/cellpose-sam-onnx
 - **jit-ui engine** in local working tree (uncommitted per project policy)
 - **8 commits + 7 docs** on cellpose-js's main branch
@@ -99,7 +99,7 @@ Not blocking, but worth queuing:
 - **`remove_bad_flow_masks` + `fill_holes_and_remove_small_masks`** ports from `cellpose.dynamics`. Currently no-ops; would help on noisy real-data edge cases.
 - **WASM compilation of the Euler integrator.** Postprocess is fine at 75 ms today; would matter on 4K microscopy images.
 - **npm publish.** Held back per scope; ready when you are. Pin the model URL into the README via a static block first.
-- **GitHub release tag for v0.1.0.** Useful as a stable jit-ui dependency target if you switch from `file:` to `github:belkassaby/Cellpose.js#v0.1.0`.
+- **GitHub release tag for v0.1.0.** Useful as a stable jit-ui dependency target if you switch from `file:` to `github:TheJacksonLaboratory/cellpose-js#v0.1.0`.
 
 ## Sources
 

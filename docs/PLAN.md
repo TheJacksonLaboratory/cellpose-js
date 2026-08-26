@@ -15,12 +15,12 @@ Browser-side Cellpose-SAM via a new `Cellpose.js` package, consumed by jit-ui as
 | Stage / Milestone                                                   | Status                                                              | Commit                                     |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
 | Stage 0 — spike gates (export parity + WebGPU latency)              | ✅ PASS — see [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md)            | (pre-repo scratch rig)                     |
-| M1 — repo skeleton, fetch + IDB cache, ORT-WebGPU session           | ✅ DONE — [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md)        | `a0c1955`                                  |
-| M2 — preprocess (normalize, channels, resize, tile)                 | ✅ DONE — [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md)        | `3035fdf`                                  |
-| M3 — inference worker, AbortSignal, tile progress                   | ✅ DONE — [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md)        | `741f340`                                  |
-| M4 — flow dynamics postprocessing (Euler + cluster + filter)        | ✅ DONE (algo) — [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md) | `ddd5dc7`                                  |
-| M5 — tile coherence (**pivoted** to averaging-then-single-dynamics) | ✅ DONE — [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md)        | `8829838`                                  |
-| M6 — package polish + HF Hub upload + GitHub publish                | ✅ DONE (no npm publish — local-only per scope)                     | `df1218d`, `08e8564`, `a5e8319`, `73a3eb7` |
+| M1 — repo skeleton, fetch + IDB cache, ORT-WebGPU session           | ✅ DONE — [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md)        | `03c2a48`                                  |
+| M2 — preprocess (normalize, channels, resize, tile)                 | ✅ DONE — [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md)        | `0bacab0`                                  |
+| M3 — inference worker, AbortSignal, tile progress                   | ✅ DONE — [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md)        | `46da51a`                                  |
+| M4 — flow dynamics postprocessing (Euler + cluster + filter)        | ✅ DONE (algo) — [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md) | `af14c8b`                                  |
+| M5 — tile coherence (**pivoted** to averaging-then-single-dynamics) | ✅ DONE — [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md)        | `16485c2`                                  |
+| M6 — package polish + HF Hub upload + GitHub publish                | ✅ DONE (no npm publish — local-only per scope)                     | `3dab306`, `123cc79`, `ef3f790`, `c26025b` |
 | M7 — jit-ui integration                                             | ✅ DONE — [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md)        | (jit-ui local; not committed per scope)    |
 
 ### Phase 1 headline numbers (M1 Max, Chrome 135+, WebGPU)
@@ -213,12 +213,12 @@ Euler integration).
 | #   | Milestone                                                                                                                                                    | Effort | Exit criterion                                                                                                                                                          |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0   | Stage-0 spikes (export parity + WebGPU latency)                                                                                                              | 2 days | **✅ DONE** — see [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md)                                                                                                            |
-| 1   | Repo skeleton, ORT-WebGPU session loader, model fetch + IndexedDB cache                                                                                      | 2 days | **✅ DONE** (`a0c1955`) — model loads, identity forward pass succeeds, IDB cache hits on reload                                                                         |
-| 2   | Pre-processing port (`cellpose.transforms`): percentile normalization, diameter-resize, tiling, channel selection                                            | 3 days | **✅ DONE** (`3035fdf`) — 7/7 parity tests pass against numpy fixtures                                                                                                  |
-| 3   | Per-tile inference with WebGPU EP, progress callback, abort signal                                                                                           | 2 days | **✅ DONE** (`741f340`) — 277 ms median (Spike B was 628 ms); abort terminates < 50 ms                                                                                  |
-| 4   | Flow dynamics post-processing port (`cellpose.dynamics`): Euler integration, convergence clustering, connected components, size + flow-consistency filtering | 5 days | **✅ DONE** (`ddd5dc7`) — single-cell IoU 1.000, empty 1.000; 20-real-image rig deferred                                                                                |
-| 5   | Tile stitching with IoU-based label merging in overlap regions                                                                                               | 2 days | **✅ DONE — pivoted** (`8829838`) — replaced with `average_tiles` + single full-image dynamics (Python's actual approach; same asymptotic complexity, better constants) |
-| 6   | API polish, README with quality + perf numbers, npm publish                                                                                                  | 2 days | **✅ DONE** except npm publish (scoped local-only) — `df1218d`, `08e8564`, `a5e8319`, `73a3eb7`                                                                         |
+| 1   | Repo skeleton, ORT-WebGPU session loader, model fetch + IndexedDB cache                                                                                      | 2 days | **✅ DONE** (`03c2a48`) — model loads, identity forward pass succeeds, IDB cache hits on reload                                                                         |
+| 2   | Pre-processing port (`cellpose.transforms`): percentile normalization, diameter-resize, tiling, channel selection                                            | 3 days | **✅ DONE** (`0bacab0`) — 7/7 parity tests pass against numpy fixtures                                                                                                  |
+| 3   | Per-tile inference with WebGPU EP, progress callback, abort signal                                                                                           | 2 days | **✅ DONE** (`46da51a`) — 277 ms median (Spike B was 628 ms); abort terminates < 50 ms                                                                                  |
+| 4   | Flow dynamics post-processing port (`cellpose.dynamics`): Euler integration, convergence clustering, connected components, size + flow-consistency filtering | 5 days | **✅ DONE** (`af14c8b`) — single-cell IoU 1.000, empty 1.000; 20-real-image rig deferred                                                                                |
+| 5   | Tile stitching with IoU-based label merging in overlap regions                                                                                               | 2 days | **✅ DONE — pivoted** (`16485c2`) — replaced with `average_tiles` + single full-image dynamics (Python's actual approach; same asymptotic complexity, better constants) |
+| 6   | API polish, README with quality + perf numbers, npm publish                                                                                                  | 2 days | **✅ DONE** except npm publish (scoped local-only) — `3dab306`, `123cc79`, `ef3f790`, `c26025b`                                                                         |
 | 7   | **jit-ui integration**                                                                                                                                       | 2 days | **✅ DONE** — [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md). All four plan-mandated gates pass (visible, runs, overlays masks, abortable)                          |
 
 **Total:** ~3.5 weeks of focused work, assuming both spikes pass.
@@ -233,7 +233,7 @@ See §2. Two scripts, one for export parity, one for WebGPU latency. Output is a
 
 ### Milestone 1 — Repo skeleton
 
-**Status:** ✅ DONE — commit `a0c1955`. Full report: [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md). 5 friction points documented (ORT-web ESM entry, dynamic-import same-origin requirement, etc.).
+**Status:** ✅ DONE — commit `03c2a48`. Full report: [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md). 5 friction points documented (ORT-web ESM entry, dynamic-import same-origin requirement, etc.).
 
 - New repo `Cellpose.js`, BSD-3 or MIT.
 - `package.json` with ESM-only build via Vite library mode.
@@ -248,7 +248,7 @@ See §2. Two scripts, one for export parity, one for WebGPU latency. Output is a
 
 ### Milestone 2 — Pre-processing
 
-**Status:** ✅ DONE — commit `3035fdf`. Full report: [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md). 7/7 parity tests pass against numpy fixtures (normalize max abs err < 1e-5, tiling bit-exact on valid region). Browser bilinear ≠ cv2.INTER_LINEAR — qualitative validation only for `diameterResize` in M2.
+**Status:** ✅ DONE — commit `0bacab0`. Full report: [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md). 7/7 parity tests pass against numpy fixtures (normalize max abs err < 1e-5, tiling bit-exact on valid region). Browser bilinear ≠ cv2.INTER_LINEAR — qualitative validation only for `diameterResize` in M2.
 Port from `cellpose.transforms`:
 
 1. **Normalization:** per-channel 1st/99th percentile rescaling to [0, 1], optional invert.
@@ -258,7 +258,7 @@ Port from `cellpose.transforms`:
 
 ### Milestone 3 — Inference
 
-**Status:** ✅ DONE — commit `741f340`. Full report: [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md). 277 ms median per tile (vs Spike B 628 ms — ORT 1.26 is ~2.3× faster than 1.20). Worker offload eliminates UI jank. Abort latency < 50 ms; post-abort respawn from IDB cache works.
+**Status:** ✅ DONE — commit `46da51a`. Full report: [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md). 277 ms median per tile (vs Spike B 628 ms — ORT 1.26 is ~2.3× faster than 1.20). Worker offload eliminates UI jank. Abort latency < 50 ms; post-abort respawn from IDB cache works.
 
 - WebGPU EP only.
 - Input tensor: `(1, 3, 256, 256)` as `Float16Array`. Build from the
@@ -273,7 +273,7 @@ Port from `cellpose.transforms`:
 
 ### Milestone 4 — Flow dynamics (hardest stage)
 
-**Status:** ✅ DONE (algorithm) — commit `ddd5dc7`. Full report: [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md). Per-tile dynamics ~53 ms. single-cell IoU 1.000, empty 1.000, three-cells 0.601 (synthetic-overlap noise — 3 of 5 labels match >0.95). The 20-real-image IoU rig is filed as Phase 1 follow-up. `remove_bad_flow_masks` (flow-consistency filter) and `fill_holes_and_remove_small_masks` deferred until a real-image case demands them.
+**Status:** ✅ DONE (algorithm) — commit `af14c8b`. Full report: [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md). Per-tile dynamics ~53 ms. single-cell IoU 1.000, empty 1.000, three-cells 0.601 (synthetic-overlap noise — 3 of 5 labels match >0.95). The 20-real-image IoU rig is filed as Phase 1 follow-up. `remove_bad_flow_masks` (flow-consistency filter) and `fill_holes_and_remove_small_masks` deferred until a real-image case demands them.
 Port `cellpose.dynamics`:
 
 1. Threshold `cellprob > threshold` (default 0).
@@ -286,7 +286,7 @@ Implement in pure JS first for correctness, profile, promote hot loops to WASM o
 
 ### Milestone 5 — Tile stitching (PIVOTED to averaging-then-dynamics)
 
-**Status:** ✅ DONE — commit `8829838`. Full report: [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md). The plan-as-written specified per-tile dynamics + IoU label-merging stitcher. During M4 I noticed Python uses `cellpose.transforms.average_tiles` to weighted-average per-tile predictions before dynamics, then runs dynamics ONCE on the full image. After asymptotic analysis (same O(H·W·niter), better constants, smoother boundaries) and a quick LOC count (~110 vs ~250), pivoted to mirror Python's approach. 4/4 round-trip tests on `averageTiles` pass at < 1e-5 max abs err; the synthetic 400×400 (4 blobs, 4 tiles) gives 4 contiguous instances across tile borders. Postprocess time dropped to ~74 ms (from 212 ms with per-tile dynamics).
+**Status:** ✅ DONE — commit `16485c2`. Full report: [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md). The plan-as-written specified per-tile dynamics + IoU label-merging stitcher. During M4 I noticed Python uses `cellpose.transforms.average_tiles` to weighted-average per-tile predictions before dynamics, then runs dynamics ONCE on the full image. After asymptotic analysis (same O(H·W·niter), better constants, smoother boundaries) and a quick LOC count (~110 vs ~250), pivoted to mirror Python's approach. 4/4 round-trip tests on `averageTiles` pass at < 1e-5 max abs err; the synthetic 400×400 (4 blobs, 4 tiles) gives 4 contiguous instances across tile borders. Postprocess time dropped to ~74 ms (from 212 ms with per-tile dynamics).
 
 - Run dynamics per tile.
 - Merge across overlapping borders by matching labels with IoU > 0.5 in the overlap region.
@@ -295,7 +295,7 @@ Implement in pure JS first for correctness, profile, promote hot loops to WASM o
 
 ### Milestone 6 — Polish & publish
 
-**Status:** ✅ DONE (no npm publish, by scope decision). Commits: `df1218d` (initial polish), `08e8564` (HF Hub URL in demo), `a5e8319` (tsc build switch + memory cap), `73a3eb7` (docs import). M6 deviated in two ways: (a) switched the public build from Vite library mode to plain `tsc` after the Vite library build emitted webpack-incompatible worker URLs when consumed by jit-ui; (b) shipped to HF Hub at `ballon999/cellpose-sam-onnx` and to GitHub at `TheJacksonLaboratory/cellpose-js`. npm publish remains parked (local-only per scope).
+**Status:** ✅ DONE (no npm publish, by scope decision). Commits: `3dab306` (initial polish), `123cc79` (HF Hub URL in demo), `ef3f790` (tsc build switch + memory cap), `c26025b` (docs import). M6 deviated in two ways: (a) switched the public build from Vite library mode to plain `tsc` after the Vite library build emitted webpack-incompatible worker URLs when consumed by jit-ui; (b) shipped to HF Hub at `ballon999/cellpose-sam-onnx` and to GitHub at `TheJacksonLaboratory/cellpose-js`. npm publish remains parked (local-only per scope).
 
 - README with quality (IoU vs Python CPSAM) and perf (ms/tile, ms/megapixel) numbers.
 - Versioned npm release.
@@ -370,7 +370,7 @@ Previous baseline: the 2026-05-22 parity review (upstream `571d2f4`). Diffed `tr
 
 ### Phase 1 shipping artifacts (added 2026-05-15, refreshed at v0.1.1)
 
-- **cellpose-js code** — https://github.com/TheJacksonLaboratory/cellpose-js (public, MIT). Phase 1 commit trail: `a0c1955` (M1) → `3035fdf` (M2) → `741f340` (M3) → `ddd5dc7` (M4) → `8829838` (M5) → `df1218d` + `08e8564` + `a5e8319` (M6) → `73a3eb7` (docs import) → `c567ca6` + `4c1a94a` + `c16de78` (docs: plan updates + M7 memo) → `10a96a7` (CI/CD + ESLint/Prettier) → `98d4305` (track fixtures) → PR #1 `34dc3ab` (provenance metadata) → **v0.1.0 published** → PR #2 `839d02a` (README HF URL fix) → PR #3 `241576c` (v0.1.1 bump) → **v0.1.1 published**.
+- **cellpose-js code** — https://github.com/TheJacksonLaboratory/cellpose-js (public, MIT). Phase 1 commit trail: `03c2a48` (M1) → `0bacab0` (M2) → `46da51a` (M3) → `af14c8b` (M4) → `16485c2` (M5) → `3dab306` + `123cc79` + `ef3f790` (M6) → `c26025b` (docs import) → `0a11373` + `96e0f04` + `cdb2a47` (docs: plan updates + M7 memo) → `d81706d` (CI/CD + ESLint/Prettier) → `d433d24` (track fixtures) → PR #1 `7f9b403` (provenance metadata) → **v0.1.0 published** → PR #2 `fcc2636` (README HF URL fix) → PR #3 `41ceae2` (v0.1.1 bump) → **v0.1.1 published**.
 - **cellpose-js on npm** — https://www.npmjs.com/package/cellpose-js. `0.1.1` is `latest`; `0.1.0` is superseded. Both ship with signed sigstore provenance.
 - **CPSAM FP16 ONNX** — https://huggingface.co/jax-image-tools/cellpose-sam-onnx (public; 588 MB; ETag `52fd6881…` matches the Stage-0 source SHA-256).
 - **Per-milestone result memos** — [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md), [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md), [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md), [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md), [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md), [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md), [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md). (M6 didn't get its own memo — milestones M6 and onward are captured here in PLAN.md instead.)

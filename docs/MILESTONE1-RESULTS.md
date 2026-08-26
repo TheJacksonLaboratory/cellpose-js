@@ -6,7 +6,7 @@ forward pass on a tile_.
 
 **Date run:** 2026-05-14
 **Verdict:** **PASS**. Phase 1 work continues to Milestone 2 (preprocessing).
-**Repo:** `~/git/Cellpose.js/` — initial commit `a0c1955`.
+**Repo:** `~/git/Cellpose.js/` — initial commit `03c2a48`.
 
 ---
 
@@ -142,7 +142,7 @@ Built bundle: **6.18 kB** (gzipped 2.52 kB). Excludes `onnxruntime-web` and
 
 ## Sources
 
-- Initial commit: `~/git/Cellpose.js` `a0c1955`
+- Initial commit: `~/git/Cellpose.js` `03c2a48`
 - Live demo: `vite serve examples/demo/` at http://localhost:5173/
 - Model artifact (dev): `examples/demo/public/cpsam_fp16.onnx` symlink →
   `~/cellpose-js-spike/cpsam_fp16.onnx` (588 MB FP16 ONNX)

@@ -7,7 +7,7 @@ execution through the new segment() entry point._
 
 **Date run:** 2026-05-14
 **Verdict:** **PASS**. Phase 1 work continues to Milestone 3 (worker offload + abort).
-**Repo:** `~/git/Cellpose.js/` — commit `3035fdf`.
+**Repo:** `~/git/Cellpose.js/` — commit `0bacab0`.
 
 ---
 
@@ -147,7 +147,7 @@ Smaller list than M1 — most of the surface was straight numpy → JS.
 
 ## Sources
 
-- Code commit: `~/git/Cellpose.js` `3035fdf`
+- Code commit: `~/git/Cellpose.js` `0bacab0`
 - Fixtures: `~/cellpose-js-spike/fixtures/` (gen script:
   `~/cellpose-js-spike/gen_preprocess_fixtures.py`)
 - Live demo: http://localhost:5173/ (Vite dev server)

@@ -9,7 +9,7 @@ criterion: _port cellpose.dynamics, achieve per-tile mean IoU ≥ 0.9 vs Python.
 **Verdict:** **PASS (with caveat)**. Algorithm work is solid; the formal
 20-real-image IoU rig is filed as M4 follow-up. Phase 1 continues to
 Milestone 5 (tile stitching).
-**Repo:** `~/git/Cellpose.js/` — commit `ddd5dc7`.
+**Repo:** `~/git/Cellpose.js/` — commit `af14c8b`.
 
 ---
 
@@ -153,7 +153,7 @@ filters.ts`, default `flow_threshold = 0` (off) for backward compatibility.
 
 ## Sources
 
-- Code commit: `~/git/Cellpose.js` `ddd5dc7`
+- Code commit: `~/git/Cellpose.js` `af14c8b`
 - Fixtures: `~/cellpose-js-spike/fixtures_dyn/` (gen script:
   `~/cellpose-js-spike/gen_dynamics_fixtures.py`)
 - Live demo: http://localhost:5173/

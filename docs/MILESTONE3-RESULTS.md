@@ -8,7 +8,7 @@ throughput regression._
 
 **Date run:** 2026-05-14
 **Verdict:** **PASS**. Phase 1 work continues to Milestone 4 (flow dynamics).
-**Repo:** `~/git/Cellpose.js/` — commit `741f340`.
+**Repo:** `~/git/Cellpose.js/` — commit `46da51a`.
 
 ---
 
@@ -106,7 +106,7 @@ boundary on each call. At 6 tiles that's ~9 MB of copies avoided per Run.
 
 ## Sources
 
-- Code commit: `~/git/Cellpose.js` `741f340`
+- Code commit: `~/git/Cellpose.js` `46da51a`
 - Architecture diagram source: this memo
 - Live demo: http://localhost:5173/ (Vite dev server)
 - Reference for cancellation pattern: jit-ui's

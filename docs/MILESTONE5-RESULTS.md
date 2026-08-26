@@ -9,7 +9,7 @@ cells that span tile borders appear as single instances at source resolution._
 **Date run:** 2026-05-14
 **Verdict:** **PASS**. Phase 1's algorithm work is complete; M6 (polish + publish)
 and M7 (jit-ui integration) remain.
-**Repo:** `~/git/Cellpose.js/` — commit `8829838`.
+**Repo:** `~/git/Cellpose.js/` — commit `16485c2`.
 
 ---
 
@@ -155,7 +155,7 @@ input image (H_src, W_src, C)       │                                         
 
 ## Sources
 
-- Code commit: `~/git/Cellpose.js` `8829838`
+- Code commit: `~/git/Cellpose.js` `16485c2`
 - Live demo: http://localhost:5173/
 - Python reference: `cellpose.transforms.average_tiles` and `_taper_mask` in
   `~/cellpose-js-spike/.venv/.../cellpose/transforms.py`

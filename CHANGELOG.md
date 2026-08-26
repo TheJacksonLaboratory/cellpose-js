@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-08-26
+
+Ownership and hosting move. **No functional changes** — `src/` is untouched
+since 0.5.0, dependencies are unchanged, and `segment()` behaves identically.
+Within the published tarball only `README.md` and `LICENSE` differ.
+
+### Changed
+
+- **Repository moved to
+  [`TheJacksonLaboratory/cellpose-js`](https://github.com/TheJacksonLaboratory/cellpose-js).**
+  `repository`, `homepage`, and `bugs` in `package.json` now point there. That
+  field is also what npm provenance attests against, so from this release on the
+  attestation names the Jackson Laboratory repo. The old
+  `belkassaby/Cellpose.js` URL redirects.
+
+- **`LICENSE` now carries The Jackson Laboratory's copyright** alongside the
+  original author's. Still MIT — no terms changed.
+
+- **Model weights are served from
+  [`jax-image-tools`](https://huggingface.co/jax-image-tools) on Hugging Face.**
+  `README.md` and `examples/demo` now point at
+  `jax-image-tools/cellpose-sam-onnx`. The `Ballon999` copies remain public and
+  content-verified identical, so URLs pinned to them keep working — but nothing
+  redirects between the two accounts, so they can drift.
+
+### Fixed
+
+- **`package-lock.json` version field** had been stuck at `0.1.0` since the
+  first release. It now tracks `package.json`.
+
 ## [0.5.0] — 2026-08-12
 
 Re-synced against upstream [`MouseLand/cellpose`](https://github.com/MouseLand/cellpose)
@@ -224,6 +254,7 @@ label maps. See [`docs/PLAN.md`](./docs/PLAN.md) for the full milestone trail
 and [`docs/STAGE0-RESULTS.md`](./docs/STAGE0-RESULTS.md) for parity / latency
 measurements.
 
+[0.6.0]: https://github.com/TheJacksonLaboratory/cellpose-js/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/TheJacksonLaboratory/cellpose-js/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/TheJacksonLaboratory/cellpose-js/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/TheJacksonLaboratory/cellpose-js/compare/v0.3.0...v0.4.0

@@ -35,7 +35,7 @@ Browser-side Cellpose-SAM via a new `Cellpose.js` package, consumed by jit-ui as
 
 - **GitHub:** https://github.com/TheJacksonLaboratory/cellpose-js (public, MIT). `main` protected — all changes via PR.
 - **npm:** [`cellpose-js@0.1.1`](https://www.npmjs.com/package/cellpose-js) (latest). v0.1.0 superseded. Both releases ship with signed sigstore [provenance](https://docs.npmjs.com/generating-provenance-statements) linking each tarball back to the GitHub Actions run that built it.
-- **Model on HF Hub:** https://huggingface.co/ballon999/cellpose-sam-onnx (public; 588 MB FP16 ONNX). Note the HF account is `Ballon999` (canonical case), not `belkassaby` as earlier drafts of this plan suggested — both belong to the same person.
+- **Model on HF Hub:** https://huggingface.co/jax-image-tools/cellpose-sam-onnx (public; 588 MB FP16 ONNX). Originally published to `Ballon999` (canonical case — not `belkassaby`, as earlier drafts of this plan suggested; both belong to the same person) and copied to `jax-image-tools` on 2026-08-25. Both copies remain public and identical.
 - **CI / CD:** [`.github/workflows/ci-cd.yaml`](../.github/workflows/ci-cd.yaml). Every push to `main` / `release/**` and every PR runs: typecheck → eslint → prettier --check → vitest → build. Pushing a `v*.*.*` tag whose commit is reachable from `main` or `release/x.y.z` triggers `npm publish --provenance`. Badges in the [README](../README.md).
 - **jit-ui consumer:** new `cellpose-engine.ts` registered alongside the existing engines; `cellpose-segment` op visible in the pipeline dialog. Dependency now references `cellpose-js: ^0.1.0` from the npm registry (no longer the local `file:` symlink that bootstrapped M7).
 
@@ -372,7 +372,7 @@ Previous baseline: the 2026-05-22 parity review (upstream `571d2f4`). Diffed `tr
 
 - **cellpose-js code** — https://github.com/TheJacksonLaboratory/cellpose-js (public, MIT). Phase 1 commit trail: `a0c1955` (M1) → `3035fdf` (M2) → `741f340` (M3) → `ddd5dc7` (M4) → `8829838` (M5) → `df1218d` + `08e8564` + `a5e8319` (M6) → `73a3eb7` (docs import) → `c567ca6` + `4c1a94a` + `c16de78` (docs: plan updates + M7 memo) → `10a96a7` (CI/CD + ESLint/Prettier) → `98d4305` (track fixtures) → PR #1 `34dc3ab` (provenance metadata) → **v0.1.0 published** → PR #2 `839d02a` (README HF URL fix) → PR #3 `241576c` (v0.1.1 bump) → **v0.1.1 published**.
 - **cellpose-js on npm** — https://www.npmjs.com/package/cellpose-js. `0.1.1` is `latest`; `0.1.0` is superseded. Both ship with signed sigstore provenance.
-- **CPSAM FP16 ONNX** — https://huggingface.co/ballon999/cellpose-sam-onnx (public; 588 MB; ETag `52fd6881…` matches the Stage-0 source SHA-256).
+- **CPSAM FP16 ONNX** — https://huggingface.co/jax-image-tools/cellpose-sam-onnx (public; 588 MB; ETag `52fd6881…` matches the Stage-0 source SHA-256).
 - **Per-milestone result memos** — [`STAGE0-RESULTS.md`](./STAGE0-RESULTS.md), [`MILESTONE1-RESULTS.md`](./MILESTONE1-RESULTS.md), [`MILESTONE2-RESULTS.md`](./MILESTONE2-RESULTS.md), [`MILESTONE3-RESULTS.md`](./MILESTONE3-RESULTS.md), [`MILESTONE4-RESULTS.md`](./MILESTONE4-RESULTS.md), [`MILESTONE5-RESULTS.md`](./MILESTONE5-RESULTS.md), [`MILESTONE7-RESULTS.md`](./MILESTONE7-RESULTS.md). (M6 didn't get its own memo — milestones M6 and onward are captured here in PLAN.md instead.)
 
 ### Upstream references

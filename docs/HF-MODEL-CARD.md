@@ -71,7 +71,7 @@ import { Cellpose, configureOrt } from 'cellpose-js';
 configureOrt({ wasmPaths: '/ort/' }); // serve ORT WASM sidecars same-origin
 
 const cp = await Cellpose.fromPretrained(
-  'https://huggingface.co/ballon999/cellpose-sam-onnx/resolve/main/cpsam_fp16.onnx',
+  'https://huggingface.co/jax-image-tools/cellpose-sam-onnx/resolve/main/cpsam_fp16.onnx',
   { preload: true },
 );
 

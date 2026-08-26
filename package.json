@@ -5,13 +5,13 @@
   "type": "module",
   "license": "MIT",
   "author": "Baha Elkassaby",
-  "homepage": "https://github.com/belkassaby/Cellpose.js#readme",
+  "homepage": "https://github.com/TheJacksonLaboratory/cellpose-js#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/belkassaby/Cellpose.js.git"
+    "url": "git+https://github.com/TheJacksonLaboratory/cellpose-js.git"
   },
   "bugs": {
-    "url": "https://github.com/belkassaby/Cellpose.js/issues"
+    "url": "https://github.com/TheJacksonLaboratory/cellpose-js/issues"
   },
   "keywords": [
     "cellpose",
